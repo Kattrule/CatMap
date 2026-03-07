@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Satellit Glob - Fixad</title>
+    
+    <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
+
+    <style>
+        :root {
+            --indigo: #7582ff;
+            --purple: #bd93f9;
+            --yellow: #f1fa8c;
+            --cyan: #8be9fd;
+            --red: #ff5555;
+        }
+
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; }
+        #map { height: 100%; width: 100%; position: absolute; top: 0; bottom: 0; }
+
+        .maplibregl-popup-content {
+            background: rgba(15, 15, 30, 0.9) !important;
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--indigo);
+            border-radius: 12px !important;
+            padding: 12px !important;
+            color: white;
+        }
+
+        .nav-btn {
+            margin-top: 10px; width: 100%; background: var(--indigo);
+            color: white; border: none; padding: 8px; border-radius: 5px;
+            font-weight: bold; cursor: pointer; font-size: 0.8rem;
+        }
+
+        #routeInfo {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(10, 10, 30, 0.9); padding: 10px 20px;
+            border-radius: 20px; border: 1px solid var(--indigo);
+            color: white; display: none; z-index: 2000; font-family: sans-serif;
+        }
+
+        .marker-arrow {
+            width: 0; height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-bottom: 40px solid var(--purple);
+            filter: drop-shadow(0 0 5px white);
+        }
+
+        .map-tools { position: absolute; bottom: 30px; right: 20px; z-index: 1000; }
+        .tool-btn {
+            width: 60px; height: 60px; background: rgba(10, 10, 30, 0.85);
+            border: 2px solid var(--indigo); border-radius: 50%; color: white;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; font-size: 1.5rem; backdrop-filter: blur(5px);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+    <div id="routeInfo"></div>
+
+    <div class="map-tools">
+        <div class="tool-btn" id="lockBtn" onclick="toggleLock()">🔒</div>
+    </div>
+
+    <script>
+        let followUser = true;
+        let userMarker = null;
+        let userCoords = null;
+        let pinMarkers = [];
+        let pressTimer;
+
+        // Initiera karta med Google Satellit
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    's-tiles': {
+                        type: 'raster',
+                        tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'],
+                        tileSize: 256,
+                        attribution: 'Google'
+                    }
+                },
+                layers: [{
+                    id: 's-layer',
+                    type: 'raster',
+                    source: 's-tiles',
+                    minzoom: 0,
+                    maxzoom: 22
+                }]
+            },
+            center: [15.0, 62.0],
+            zoom: 2,
+            projection: 'globe',
+            doubleClickZoom: false
+        });
+
+        // Funktion för att placera nål
+        function placePin(lngLat) {
+            if (pinMarkers.length >= 5) { pinMarkers.shift().remove(); }
+
+            const html = `
+                <div style="text-align:center;">
+                    <span style="color:var(--yellow); font-size:0.7rem; letter-spacing:1px;">POSITION</span><br>
+                    <code style="color:var(--cyan); font-size:0.9rem;">${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}</code>
+                    <button class="nav-btn" onclick="getDirections([${lngLat.lng}, ${lngLat.lat}])">NAVIGERA HIT</button>
+                </div>
+            `;
+
+            const popup = new maplibregl.Popup({ offset: 25 }).setHTML(html);
+            const newPin = new maplibregl.Marker({ color: "#ff5555" })
+                .setLngLat(lngLat)
+                .setPopup(popup)
+                .addTo(map);
+
+            newPin.togglePopup();
+            pinMarkers.push(newPin);
+        }
+
+        // Vägbeskrivning via OSRM
+        async function getDirections(dest) {
+            if (!userCoords) return alert("Väntar på GPS...");
+            const url = `https://router.project-osrm.org/route/v1/driving/${userCoords[0]},${userCoords[1]};${dest[0]},${dest[1]}?overview=full&geometries=geojson`;
+            
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                const geometry = data.routes[0].geometry;
+
+                if (map.getSource('route')) {
+                    map.getSource('route').setData(geometry);
+                } else {
+                    map.addSource('route', { type: 'geojson', data: geometry });
+                    map.addLayer({
+                        id: 'route', type: 'line', source: 'route',
+                        paint: { 'line-color': '#7582ff', 'line-width': 5 }
+                    });
+                }
+
+                const dist = (data.routes[0].distance / 1000).toFixed(1);
+                const info = document.getElementById('routeInfo');
+                info.innerHTML = `<b>${dist} km</b> rutt utritad`;
+                info.style.display = 'block';
+            } catch (e) { alert("Kunde inte hämta väg."); }
+        }
+
+        // Dubbelklick rensar allt
+        map.on('dblclick', () => {
+            pinMarkers.forEach(p => p.remove()); pinMarkers = [];
+            if (map.getLayer('route')) map.removeLayer('route');
+            if (map.getSource('route')) map.removeSource('route');
+            document.getElementById('routeInfo').style.display = 'none';
+        });
+
+        // Long press (Håll inne 600ms)
+        map.on('mousedown', (e) => { pressTimer = setTimeout(() => placePin(e.lngLat), 600); });
+        map.on('mouseup', () => clearTimeout(pressTimer));
+        map.on('touchstart', (e) => { pressTimer = setTimeout(() => placePin(e.lngLat), 600); });
+        map.on('touchend', () => clearTimeout(pressTimer));
+
+        // Användarens position
+        const el = document.createElement('div');
+        el.className = 'marker-arrow';
+
+        function updatePos(pos) {
+            userCoords = [pos.coords.longitude, pos.coords.latitude];
+            if (!userMarker) {
+                userMarker = new maplibregl.Marker({ element: el }).setLngLat(userCoords).addTo(map);
+                map.setZoom(15);
+            } else { userMarker.setLngLat(userCoords); }
+            el.style.transform = `rotate(${pos.coords.heading || 0}deg)`;
+            if (followUser) map.easeTo({ center: userCoords });
+        }
+
+        function toggleLock() {
+            followUser = !followUser;
+            document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓";
+        }
+
+        navigator.geolocation.watchPosition(updatePos, null, { enableHighAccuracy: true });
+        map.on('dragstart', () => { if (followUser) toggleLock(); });
+    </script>
+</body>
+</html>

@@ -3,193 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Satellit Glob Pro - V12 (Slutgiltig)</title>
+    <title>Satellit Glob V13</title>
     
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
 
     <style>
-        :root {
-            --indigo: #7582ff;
-            --purple: #bd93f9;
-            --cyan: #8be9fd;
-            --yellow: #f1fa8c;
-            --bg-glass: rgba(15, 15, 30, 0.95);
-            --arrow-scale: 1; /* Ändras automatiskt vid zoom */
-        }
-
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: sans-serif; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; }
         #map { height: 100%; width: 100%; position: absolute; }
 
-        /* SÖKRUTA */
-        #search-container { position: absolute; top: 15px; left: 15px; right: 15px; z-index: 3000; display: flex; flex-direction: column; }
-        .search-wrapper { position: relative; display: flex; align-items: center; }
-        #search-input {
-            width: 100%; padding: 12px 45px 12px 15px; border-radius: 12px;
-            border: 1px solid var(--indigo); background: var(--bg-glass);
-            color: white; font-size: 1rem; outline: none; backdrop-filter: blur(10px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5); box-sizing: border-box;
-        }
-        #clear-search { position: absolute; right: 15px; color: #aaa; cursor: pointer; font-size: 1.2rem; display: none; }
-        #search-results {
-            background: var(--bg-glass); border-radius: 12px; margin-top: 5px;
-            max-height: 250px; overflow-y: auto; display: none; border: 1px solid var(--indigo);
-        }
-        .result-item { padding: 12px; color: white; border-bottom: 1px solid rgba(117, 130, 255, 0.2); font-size: 0.9rem; cursor: pointer; }
-
         /* KOORDINATRUTAN */
-        .coord-box { text-align: center; padding: 5px; }
-        .coord-label { color: var(--yellow); font-size: 0.7rem; display: block; margin-bottom: 2px; font-weight: bold; }
-        .coord-values { color: var(--cyan); font-family: monospace; font-size: 0.9rem; margin-bottom: 10px; }
-
-        /* SVÄNG-PILAR SOM SKALAS */
-        .turn-arrow-icon {
-            width: 24px; height: 24px;
-            display: flex; justify-content: center; align-items: center;
-            transform: scale(var(--arrow-scale)); /* Skalas med kartan */
-            filter: drop-shadow(0 0 3px rgba(0,0,0,0.8));
-            pointer-events: none;
-            transition: transform 0.1s linear, opacity 0.2s;
-        }
-
         .maplibregl-popup-content {
-            background: var(--bg-glass) !important; color: white;
-            border: 1px solid var(--indigo); border-radius: 10px !important; backdrop-filter: blur(10px);
+            background: rgba(10, 10, 25, 0.9) !important; color: white;
+            border: 1px solid #7582ff; border-radius: 10px !important;
+            padding: 15px !important; text-align: center;
         }
         .nav-btn {
-            width: 100%; background: var(--indigo); color: white; border: none;
-            padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;
+            background: #7582ff; color: white; border: none; padding: 10px;
+            border-radius: 5px; font-weight: bold; margin-top: 10px; cursor: pointer;
         }
 
+        /* SVÄNG-PILAR */
+        .turn-arrow {
+            width: 24px; height: 24px;
+            transition: transform 0.1s linear;
+        }
+
+        /* VERKTYG */
         .map-tools { position: absolute; bottom: 30px; right: 20px; z-index: 1000; }
         .tool-btn {
-            width: 60px; height: 60px; background: var(--bg-glass);
-            border: 2px solid var(--indigo); border-radius: 50%; color: white;
-            display: flex; justify-content: center; align-items: center; font-size: 1.5rem; cursor: pointer;
+            width: 60px; height: 60px; background: rgba(10,10,25,0.8);
+            border: 2px solid #7582ff; border-radius: 50%; color: white;
+            display: flex; justify-content: center; align-items: center; font-size: 1.5rem;
         }
     </style>
 </head>
 <body>
-
-    <div id="search-container">
-        <div class="search-wrapper">
-            <input type="text" id="search-input" placeholder="Sök plats eller adress..." autocomplete="off">
-            <div id="clear-search">&times;</div>
-        </div>
-        <div id="search-results"></div>
-    </div>
 
     <div id="map"></div>
     <div class="map-tools"><div class="tool-btn" id="lockBtn" onclick="toggleLock()">🔒</div></div>
 
     <script>
         let followUser = true, userMarker = null, userCoords = null;
-        let pinMarkers = [], turnMarkers = [], pressTimer = null, isMoving = false;
+        let pinMarkers = [], turnMarkers = [], pressTimer = null;
 
+        // Starta kartan direkt med Google Satellit
         const map = new maplibregl.Map({
             container: 'map',
             style: {
                 version: 8,
-                sources: { 's-tiles': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], tileSize: 256 } },
-                layers: [{ id: 's-layer', type: 'raster', source: 's-tiles' }]
+                sources: { 'google-sat': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], tileSize: 256 } },
+                layers: [{ id: 'sat-layer', type: 'raster', source: 'google-sat' }]
             },
-            center: [15.0, 62.0], zoom: 4, projection: 'globe', doubleClickZoom: false
+            center: [15.0, 62.0], zoom: 4
         });
 
-        // --- SKALA PILARNA VID ZOOM ---
+        // --- SKALA PILAR ---
         map.on('zoom', () => {
-            const z = map.getZoom();
-            // Krymper pilarna när man zoomar ut
-            const scale = Math.max(0.1, Math.min(1.5, (z - 5) / 10));
-            document.documentElement.style.setProperty('--arrow-scale', scale);
-            
-            // Döljer pilarna helt om man är för långt bort
+            const scale = Math.max(0.2, Math.min(1.2, (map.getZoom() - 5) / 10));
             turnMarkers.forEach(m => {
-                m.getElement().style.opacity = z < 10 ? 0 : 1;
+                m.getElement().style.transform = `scale(${scale})`;
             });
         });
 
-        // --- SÖKFUNKTION ---
-        const searchInput = document.getElementById('search-input');
-        const searchResults = document.getElementById('search-results');
-        const clearBtn = document.getElementById('clear-search');
-
-        searchInput.addEventListener('input', async (e) => {
-            const query = e.target.value;
-            clearBtn.style.display = query.length > 0 ? 'block' : 'none';
-            if (query.length < 3) { searchResults.style.display = 'none'; return; }
-            try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
-                const data = await res.json();
-                searchResults.innerHTML = '';
-                if (data.length > 0) {
-                    searchResults.style.display = 'block';
-                    data.forEach(place => {
-                        const div = document.createElement('div');
-                        div.className = 'result-item';
-                        div.innerText = place.display_name;
-                        div.onclick = () => {
-                            const lngLat = { lng: parseFloat(place.lon), lat: parseFloat(place.lat) };
-                            map.flyTo({ center: lngLat, zoom: 14 });
-                            placePin(lngLat);
-                            searchResults.style.display = 'none';
-                            searchInput.value = place.display_name;
-                        };
-                        searchResults.appendChild(div);
-                    });
-                }
-            } catch (err) { }
-        });
-
-        clearBtn.onclick = () => { searchInput.value = ''; searchResults.style.display = 'none'; clearBtn.style.display = 'none'; };
-
-        // --- NAVIGERING ---
-        function getBearing(s, e) {
-            const y = Math.sin((e[0]-s[0])*Math.PI/180) * Math.cos(e[1]*Math.PI/180);
-            const x = Math.cos(s[1]*Math.PI/180)*Math.sin(e[1]*Math.PI/180) - Math.sin(s[1]*Math.PI/180)*Math.cos(e[1]*Math.PI/180)*Math.cos((e[0]-s[0])*Math.PI/180);
-            return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-        }
-
+        // --- NAVIGATION ---
         async function getDirections(dest) {
-            if (!userCoords) return alert("Väntar på GPS...");
+            if (!userCoords) return;
             const url = `https://router.project-osrm.org/route/v1/driving/${userCoords[0]},${userCoords[1]};${dest[0]},${dest[1]}?overview=full&geometries=geojson&steps=true`;
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                const route = data.routes[0];
+            const res = await fetch(url);
+            const data = await res.json();
+            const route = data.routes[0];
 
-                turnMarkers.forEach(m => m.remove()); turnMarkers = [];
+            // Rensa gamla pilar
+            turnMarkers.forEach(m => m.remove()); turnMarkers = [];
 
-                if (map.getSource('route')) { map.getSource('route').setData(route.geometry); } 
-                else {
-                    map.addSource('route', { type: 'geojson', data: route.geometry });
-                    map.addLayer({ id: 'route-casing', type: 'line', source: 'route', paint: { 'line-color': '#2c2c3e', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2, 15, 10] } });
-                    map.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1, 15, 6] } });
-                }
-
-                route.legs[0].steps.forEach((step, i, steps) => {
-                    if (i < steps.length - 1) {
-                        const el = document.createElement('div'); el.className = 'turn-arrow-icon';
-                        const bearing = getBearing(step.maneuver.location, steps[i+1].maneuver.location);
-                        el.innerHTML = `<svg width="24" height="24" viewBox="0 0 100 100" style="transform: rotate(${bearing}deg)"><path d="M50 5 L90 80 L50 60 L10 80 Z" fill="#8be9fd" stroke="#fff" stroke-width="6"/></svg>`;
-                        const m = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(step.maneuver.location).addTo(map);
-                        turnMarkers.push(m);
-                    }
+            // Rita linjen
+            if (map.getSource('route')) { map.getSource('route').setData(route.geometry); } 
+            else {
+                map.addSource('route', { type: 'geojson', data: route.geometry });
+                map.addLayer({ id: 'route-line', type: 'line', source: 'route', 
+                    paint: { 'line-color': '#7582ff', 'line-width': 5, 'line-opacity': 0.8 } 
                 });
-                
-                // Lås upp kameran så man kan titta runt på rutten fritt
-                if (followUser) toggleLock();
+            }
 
-            } catch (e) {}
+            // Lägg till nya pilar
+            route.legs[0].steps.forEach((step, i, steps) => {
+                if (i < steps.length - 1) {
+                    const el = document.createElement('div');
+                    el.className = 'turn-arrow';
+                    const angle = getAngle(step.maneuver.location, steps[i+1].maneuver.location);
+                    el.innerHTML = `<svg viewBox="0 0 100 100" style="transform: rotate(${angle}deg)"><path d="M50 5 L90 85 L50 65 L10 85 Z" fill="#8be9fd" stroke="white" stroke-width="5"/></svg>`;
+                    const m = new maplibregl.Marker({ element: el }).setLngLat(step.maneuver.location).addTo(map);
+                    turnMarkers.push(m);
+                }
+            });
+            if (followUser) toggleLock();
         }
 
         // --- PLACERA NÅL ---
         function placePin(lngLat) {
-            if (isMoving) return;
-            pinMarkers.forEach(p => p.remove()); pinMarkers = [];
+            pinMarkers.forEach(p => p.remove());
             const html = `
-                <div class="coord-box">
-                    <span class="coord-label">DESTINATION</span>
-                    <div class="coord-values">${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}</div>
-                    <button class="nav-btn" onclick="getDirections([${lngLat.lng}, ${lngLat.lat}])">NAVIGERA HIT</button>
+                <div style="font-size:14px;">
+                    <b style="color:#f1fa8c;">POSITION</b><br>
+                    <span style="font-family:monospace;">${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}</span><br>
+                    <button class="nav-btn" onclick="getDirections([${lngLat.lng}, ${lngLat.lat}])">NAVIGERA</button>
                 </div>`;
+            const m = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).setPopup(new maplibregl.Popup().setHTML(html)).addTo(map);
+            m.togglePopup();
+            pinMarkers = [m];
+        }
+
+        // --- TOUCH & KLICK ---
+        map.on('touchstart', (e) => {
+            if (e.points.length === 1) {
+                pressTimer = setTimeout(() => placePin(e.lngLat), 800);
+            }
+        });
+        map.on('touchend', () => clearTimeout(pressTimer));
+        map.on('mousedown', (e) => { pressTimer = setTimeout(() => placePin(e.lngLat), 800); });
+        map.on('mouseup', () => clearTimeout(pressTimer));
+        
+        // Stäng av auto-följ när man drar
+        map.on('dragstart', () => { if (followUser) toggleLock(); });
+
+        // --- GPS ---
+        const myEl = document.createElement('div');
+        myEl.innerHTML = `<svg width="30" height="30" viewBox="0 0 100 100" id="me"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="black" stroke-width="5"/></svg>`;
+        
+        navigator.geolocation.watchPosition(pos => {
+            userCoords = [pos.coords.longitude, pos.coords.latitude];
+            if (!userMarker) {
+                userMarker = new maplibregl.Marker({ element: myEl }).setLngLat(userCoords).addTo(map);
+                map.setCenter(userCoords); map.setZoom(15);
+            } else { userMarker.setLngLat(userCoords); }
+            document.getElementById('me').style.transform = `rotate(${pos.coords.heading || 0}deg)`;
+            if (followUser) map.easeTo({ center: userCoords });
+        }, null, { enableHighAccuracy: true });
+
+        function toggleLock() { followUser = !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }
+        function getAngle(s, e) { return (Math.atan2(e[0]-s[0], e[1]-s[1]) * 180 / Math.PI + 360) % 360; }
+    </script>
+</body>
+</html>

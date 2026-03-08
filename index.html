@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Satellit Glob Pro - Tracker Edition</title>
+    <title>Satellit Glob Pro - Stabil</title>
     
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -18,52 +18,45 @@
         }
 
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; }
-        #map { height: 100%; width: 100%; position: absolute; top: 0; bottom: 0; }
+        #map { height: 100%; width: 100%; position: absolute; }
 
         /* Snygg Popup */
         .maplibregl-popup-content {
-            background: rgba(15, 15, 30, 0.9) !important;
-            backdrop-filter: blur(8px);
+            background: rgba(15, 15, 30, 0.95) !important;
+            backdrop-filter: blur(10px);
             border: 1px solid var(--indigo);
             border-radius: 12px !important;
             padding: 12px !important;
             color: white;
-            box-shadow: 0 0 15px rgba(117, 130, 255, 0.4) !important;
+            box-shadow: 0 0 20px rgba(0,0,0,0.6) !important;
         }
 
         .nav-btn {
             margin-top: 10px; width: 100%; background: var(--indigo);
-            color: white; border: none; padding: 8px; border-radius: 5px;
-            font-weight: bold; cursor: pointer; font-size: 0.8rem;
-            transition: 0.2s;
+            color: white; border: none; padding: 10px; border-radius: 6px;
+            font-weight: bold; cursor: pointer; transition: 0.2s;
         }
-        .nav-btn:active { background: var(--purple); }
 
         #routeInfo {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
             background: rgba(10, 10, 30, 0.9); padding: 10px 20px;
             border-radius: 20px; border: 1px solid var(--indigo);
             color: white; display: none; z-index: 2000; font-family: sans-serif;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
-        /* DEN LILA PILEN (FRÅN TRACKERN) */
+        /* LILA PILEN FRÅN TRACKERN */
         .tracker-arrow {
-            width: 50px;
-            height: 50px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            width: 50px; height: 50px;
+            display: flex; justify-content: center; align-items: center;
             filter: drop-shadow(0 0 8px rgba(189, 147, 249, 0.8));
         }
 
         .map-tools { position: absolute; bottom: 30px; right: 20px; z-index: 1000; }
         .tool-btn {
-            width: 60px; height: 60px; background: rgba(10, 10, 30, 0.85);
+            width: 65px; height: 65px; background: rgba(10, 10, 30, 0.9);
             border: 2px solid var(--indigo); border-radius: 50%; color: white;
             display: flex; justify-content: center; align-items: center;
-            cursor: pointer; font-size: 1.5rem; backdrop-filter: blur(5px);
-            user-select: none;
+            cursor: pointer; font-size: 1.6rem; backdrop-filter: blur(5px);
         }
     </style>
 </head>
@@ -82,7 +75,8 @@
         let userCoords = null;
         let pinMarkers = [];
         let pressTimer;
-        let startPos = { x: 0, y: 0 };
+        let isHolding = false;
+        let startPoint = { x: 0, y: 0 };
 
         const map = new maplibregl.Map({
             container: 'map',
@@ -98,26 +92,71 @@
                 layers: [{ id: 's-layer', type: 'raster', source: 's-tiles' }]
             },
             center: [15.0, 62.0],
-            zoom: 2,
+            zoom: 3,
             projection: 'globe',
-            doubleClickZoom: false
+            doubleClickZoom: false // Viktigt: rensar på dubbelklick istället
         });
 
         function placePin(lngLat) {
+            if (!isHolding) return; // Placera bara om vi fortfarande håller inne
+
             if (pinMarkers.length >= 5) { pinMarkers.shift().remove(); }
             const html = `
                 <div style="text-align:center;">
-                    <span style="color:var(--yellow); font-size:0.7rem; letter-spacing:1px;">POSITION</span><br>
-                    <code style="color:var(--cyan); font-size:0.9rem;">${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}</code>
-                    <button class="nav-btn" onclick="getDirections([${lngLat.lng}, ${lngLat.lat}])">NAVIGERA HIT</button>
+                    <span style="color:var(--yellow); font-size:0.7rem;">DESTINATION</span><br>
+                    <code style="color:var(--cyan);">${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}</code>
+                    <button class="nav-btn" onclick="getDirections([${lngLat.lng}, ${lngLat.lat}])">HÄMTA VÄG</button>
                 </div>
             `;
             const popup = new maplibregl.Popup({ offset: 25 }).setHTML(html);
             const newPin = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).setPopup(popup).addTo(map);
             newPin.togglePopup();
             pinMarkers.push(newPin);
+            isHolding = false;
         }
 
+        // --- STRUKTURERAD LONG-PRESS LOGIK ---
+        function onDown(e) {
+            isHolding = true;
+            startPoint = e.point;
+            clearTimeout(pressTimer);
+            pressTimer = setTimeout(() => {
+                if (isHolding) placePin(e.lngLat);
+            }, 700); // 0.7 sekunder för att vara säker
+        }
+
+        function onMove(e) {
+            if (!isHolding) return;
+            // Om man flyttar fingret mer än 10 pixlar, avbryt nålen (man drar i kartan)
+            const moveDist = Math.hypot(e.point.x - startPoint.x, e.point.y - startPoint.y);
+            if (moveDist > 10) {
+                isHolding = false;
+                clearTimeout(pressTimer);
+            }
+        }
+
+        function onUp() {
+            isHolding = false;
+            clearTimeout(pressTimer);
+        }
+
+        map.on('mousedown', onDown);
+        map.on('mousemove', onMove);
+        map.on('mouseup', onUp);
+        
+        map.on('touchstart', (e) => onDown(e));
+        map.on('touchmove', (e) => onMove(e));
+        map.on('touchend', onUp);
+
+        // Dubbelklick för att rensa
+        map.on('dblclick', () => {
+            pinMarkers.forEach(p => p.remove()); pinMarkers = [];
+            if (map.getLayer('route')) map.removeLayer('route');
+            if (map.getSource('route')) map.removeSource('route');
+            document.getElementById('routeInfo').style.display = 'none';
+        });
+
+        // Vägbeskrivning
         async function getDirections(dest) {
             if (!userCoords) return alert("Väntar på GPS...");
             const url = `https://router.project-osrm.org/route/v1/driving/${userCoords[0]},${userCoords[1]};${dest[0]},${dest[1]}?overview=full&geometries=geojson`;
@@ -130,50 +169,15 @@
                     map.addSource('route', { type: 'geojson', data: geometry });
                     map.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': 5 } });
                 }
-                document.getElementById('routeInfo').innerHTML = `<b>${(data.routes[0].distance / 1000).toFixed(1)} km</b> rutt klar`;
+                document.getElementById('routeInfo').innerHTML = `Rutt: <b>${(data.routes[0].distance / 1000).toFixed(1)} km</b>`;
                 document.getElementById('routeInfo').style.display = 'block';
-            } catch (e) { alert("Kunde inte hämta väg."); }
+            } catch (e) { alert("Väg kunde inte hittas."); }
         }
 
-        // DUBBELKLICK FÖR ATT RENSA
-        map.on('dblclick', () => {
-            pinMarkers.forEach(p => p.remove()); pinMarkers = [];
-            if (map.getLayer('route')) map.removeLayer('route');
-            if (map.getSource('route')) map.removeSource('route');
-            document.getElementById('routeInfo').style.display = 'none';
-        });
-
-        // LOGIK FÖR ATT PLACERA NÅL BARA OM MAN ÄR STILL
-        function startPress(e) {
-            startPos = { x: e.point.x, y: e.point.y };
-            pressTimer = setTimeout(() => placePin(e.lngLat), 600);
-        }
-
-        function cancelPress(e) {
-            // Om man flyttar mer än 5 pixlar, avbryt nålen
-            if (e.point) {
-                const dist = Math.hypot(e.point.x - startPos.x, e.point.y - startPos.y);
-                if (dist > 5) clearTimeout(pressTimer);
-            } else {
-                clearTimeout(pressTimer);
-            }
-        }
-
-        map.on('mousedown', startPress);
-        map.on('mousemove', cancelPress);
-        map.on('mouseup', cancelPress);
-        map.on('touchstart', startPress);
-        map.on('touchmove', cancelPress);
-        map.on('touchend', cancelPress);
-
-        // POSITIONSPILEN
+        // Pilen
         const arrowEl = document.createElement('div');
         arrowEl.className = 'tracker-arrow';
-        arrowEl.innerHTML = `
-            <svg width="40" height="40" viewBox="0 0 100 100">
-                <path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="#ffffff" stroke-width="4"/>
-            </svg>
-        `;
+        arrowEl.innerHTML = `<svg width="40" height="40" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="#fff" stroke-width="4"/></svg>`;
 
         function updatePos(pos) {
             userCoords = [pos.coords.longitude, pos.coords.latitude];

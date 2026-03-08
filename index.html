@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Satellit Glob Pro - V7</title>
+    <title>Satellit Glob Pro - Sök V8</title>
     
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -14,82 +14,124 @@
             --purple: #bd93f9;
             --cyan: #8be9fd;
             --yellow: #f1fa8c;
-            --route-edge: #2c2c3e; /* Ljusare kant för vägen */
+            --bg-glass: rgba(15, 15, 30, 0.9);
         }
 
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: sans-serif; }
         #map { height: 100%; width: 100%; position: absolute; }
 
-        /* DIN POSITION */
-        .v7-arrow-container {
-            width: 28px !important; height: 28px !important;
-            display: flex !important; justify-content: center; align-items: center;
+        /* SÖKRUTA */
+        #search-container {
+            position: absolute; top: 15px; left: 15px; right: 15px;
+            z-index: 3000; display: flex; flex-direction: column;
         }
-        .v7-rotate-layer {
-            width: 100%; height: 100%; display: flex; justify-content: center; align-items: center;
-            transition: transform 0.2s ease-out;
+        #search-input {
+            width: 100%; padding: 12px 15px; border-radius: 12px;
+            border: 1px solid var(--indigo); background: var(--bg-glass);
+            color: white; font-size: 1rem; outline: none;
+            backdrop-filter: blur(10px); box-sizing: border-box;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
+        #search-results {
+            background: var(--bg-glass); border-radius: 12px; margin-top: 5px;
+            max-height: 200px; overflow-y: auto; display: none;
+            border: 1px solid var(--indigo); backdrop-filter: blur(10px);
+        }
+        .result-item {
+            padding: 12px; color: white; border-bottom: 1px solid rgba(117, 130, 255, 0.2);
+            font-size: 0.9rem; cursor: pointer;
+        }
+        .result-item:last-child { border-bottom: none; }
+        .result-item:active { background: var(--indigo); }
 
-        /* SVÄNG-PILAR */
-        .turn-arrow-icon {
-            width: 24px; height: 24px;
-            filter: drop-shadow(0 0 4px var(--cyan));
-            display: flex; justify-content: center; align-items: center;
-        }
-
+        /* POPUP & NAV */
         .maplibregl-popup-content {
-            background: rgba(15, 15, 30, 0.95) !important;
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--indigo);
-            border-radius: 12px !important; padding: 12px !important; color: white;
+            background: var(--bg-glass) !important; backdrop-filter: blur(10px);
+            border: 1px solid var(--indigo); border-radius: 12px !important;
+            padding: 12px !important; color: white;
         }
-
         .nav-btn {
             margin-top: 10px; width: 100%; background: var(--indigo);
             color: white; border: none; padding: 10px; border-radius: 6px;
-            font-weight: bold; cursor: pointer; font-size: 0.8rem;
+            font-weight: bold; cursor: pointer;
+        }
+        #routeInfo {
+            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            background: var(--bg-glass); padding: 8px 15px; border-radius: 20px;
+            border: 1px solid var(--indigo); color: white; display: none; z-index: 2000;
         }
 
-        #routeInfo {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(10, 10, 30, 0.9); padding: 10px 20px;
-            border-radius: 20px; border: 1px solid var(--indigo);
-            color: white; display: none; z-index: 2000; font-family: sans-serif;
-        }
+        /* PILAR */
+        .v8-arrow-container { width: 28px; height: 28px; display: flex; justify-content: center; align-items: center; }
+        .v8-rotate-layer { transition: transform 0.2s ease-out; display: flex; justify-content: center; align-items: center; }
+        .turn-arrow-icon { width: 24px; height: 24px; filter: drop-shadow(0 0 4px var(--cyan)); }
 
         .map-tools { position: absolute; bottom: 30px; right: 20px; z-index: 1000; }
         .tool-btn {
-            width: 65px; height: 65px; background: rgba(10, 10, 30, 0.9);
+            width: 60px; height: 60px; background: var(--bg-glass);
             border: 2px solid var(--indigo); border-radius: 50%; color: white;
-            display: flex; justify-content: center; align-items: center;
-            cursor: pointer; font-size: 1.6rem;
+            display: flex; justify-content: center; align-items: center; font-size: 1.5rem;
         }
     </style>
 </head>
 <body>
+
+    <div id="search-container">
+        <input type="text" id="search-input" placeholder="Sök plats eller adress..." autocomplete="off">
+        <div id="search-results"></div>
+    </div>
 
     <div id="map"></div>
     <div id="routeInfo"></div>
     <div class="map-tools"><div class="tool-btn" id="lockBtn" onclick="toggleLock()">🔒</div></div>
 
     <script>
-        let followUser = true;
-        let userMarker = null, userCoords = null;
-        let pinMarkers = [], turnMarkers = [];
-        let pressTimer = null, isMoving = false;
+        let followUser = true, userMarker = null, userCoords = null;
+        let pinMarkers = [], turnMarkers = [], pressTimer = null, isMoving = false;
 
         const map = new maplibregl.Map({
             container: 'map',
             style: {
                 version: 8,
-                sources: {
-                    's-tiles': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], tileSize: 256 }
-                },
+                sources: { 's-tiles': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], tileSize: 256 } },
                 layers: [{ id: 's-layer', type: 'raster', source: 's-tiles' }]
             },
             center: [15.0, 62.0], zoom: 3, projection: 'globe', doubleClickZoom: false
         });
 
+        // --- SÖKFUNKTION (Nominatim API) ---
+        const searchInput = document.getElementById('search-input');
+        const searchResults = document.getElementById('search-results');
+
+        searchInput.addEventListener('input', async (e) => {
+            const query = e.target.value;
+            if (query.length < 3) { searchResults.style.display = 'none'; return; }
+
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
+                const data = await res.json();
+                
+                searchResults.innerHTML = '';
+                if (data.length > 0) {
+                    searchResults.style.display = 'block';
+                    data.forEach(place => {
+                        const div = document.createElement('div');
+                        div.className = 'result-item';
+                        div.innerText = place.display_name;
+                        div.onclick = () => {
+                            const lngLat = { lng: parseFloat(place.lon), lat: parseFloat(place.lat) };
+                            map.flyTo({ center: lngLat, zoom: 14 });
+                            placePin(lngLat);
+                            searchResults.style.display = 'none';
+                            searchInput.value = '';
+                        };
+                        searchResults.appendChild(div);
+                    });
+                }
+            } catch (err) { console.error("Sökfel:", err); }
+        });
+
+        // --- NAVIGERING & RUTT ---
         function getBearing(start, end) {
             const startLat = start[1] * Math.PI / 180, startLng = start[0] * Math.PI / 180;
             const endLat = end[1] * Math.PI / 180, endLng = end[0] * Math.PI / 180;
@@ -101,92 +143,18 @@
         async function getDirections(dest) {
             if (!userCoords) return alert("Väntar på GPS...");
             const url = `https://router.project-osrm.org/route/v1/driving/${userCoords[0]},${userCoords[1]};${dest[0]},${dest[1]}?overview=full&geometries=geojson&steps=true`;
-            
             try {
                 const res = await fetch(url);
                 const data = await res.json();
                 const routeData = data.routes[0];
-                
-                turnMarkers.forEach(m => m.remove());
-                turnMarkers = [];
+                turnMarkers.forEach(m => m.remove()); turnMarkers = [];
 
-                if (map.getSource('route')) {
-                    map.getSource('route').setData(routeData.geometry);
-                } else {
+                if (map.getSource('route')) { map.getSource('route').setData(routeData.geometry); } 
+                else {
                     map.addSource('route', { type: 'geojson', data: routeData.geometry });
-                    // LJUSARE KANT PÅ VÄGEN
                     map.addLayer({ id: 'route-casing', type: 'line', source: 'route', paint: { 'line-color': '#2c2c3e', 'line-width': 9 } });
                     map.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': 5 } });
                 }
 
                 routeData.legs[0].steps.forEach((step, i, steps) => {
-                    if (i < steps.length - 1) {
-                        const el = document.createElement('div');
-                        el.className = 'turn-arrow-icon';
-                        const bearing = getBearing(step.maneuver.location, steps[i+1].maneuver.location);
-                        el.innerHTML = `<svg width="24" height="24" viewBox="0 0 100 100" style="transform: rotate(${bearing}deg)"><path d="M50 5 L90 80 L50 60 L10 80 Z" fill="#8be9fd" stroke="#fff" stroke-width="5"/></svg>`;
-                        const m = new maplibregl.Marker({ element: el }).setLngLat(step.maneuver.location).addTo(map);
-                        turnMarkers.push(m);
-                    }
-                });
-
-                document.getElementById('routeInfo').innerHTML = `Rutt: <b>${(routeData.distance / 1000).toFixed(1)} km</b>`;
-                document.getElementById('routeInfo').style.display = 'block';
-            } catch (e) { console.error(e); }
-        }
-
-        function placePin(lngLat) {
-            if (isMoving) return;
-            if (pinMarkers.length >= 5) { pinMarkers.shift().remove(); }
-            
-            // HÄR ÄR KOORDINATERNA TILLBAKA
-            const html = `
-                <div style="text-align:center;">
-                    <span style="color:var(--yellow); font-size:0.7rem;">POSITION</span><br>
-                    <code style="color:var(--cyan); font-size:0.8rem;">${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}</code>
-                    <button class="nav-btn" onclick="getDirections([${lngLat.lng}, ${lngLat.lat}])">NAVIGERA HIT</button>
-                </div>
-            `;
-            
-            const popup = new maplibregl.Popup({ offset: 25 }).setHTML(html);
-            const newPin = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).setPopup(popup).addTo(map);
-            newPin.togglePopup();
-            pinMarkers.push(newPin);
-        }
-
-        const cancelPin = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
-        map.on('movestart', () => { isMoving = true; cancelPin(); });
-        map.on('moveend', () => { isMoving = false; });
-        map.on('mousedown', (e) => { isMoving = false; cancelPin(); pressTimer = setTimeout(() => { if (!isMoving) placePin(e.lngLat); }, 800); });
-        map.on('mouseup', cancelPin);
-        map.on('touchstart', (e) => { if (e.points && e.points.length > 1) { isMoving = true; cancelPin(); return; } isMoving = false; cancelPin(); pressTimer = setTimeout(() => { if (!isMoving) placePin(e.lngLat); }, 800); });
-        map.on('touchend', cancelPin);
-        map.on('dblclick', () => {
-            pinMarkers.forEach(p => p.remove()); turnMarkers.forEach(m => m.remove());
-            pinMarkers = []; turnMarkers = [];
-            if (map.getLayer('route')) { map.removeLayer('route'); map.removeLayer('route-casing'); map.removeSource('route'); }
-            document.getElementById('routeInfo').style.display = 'none';
-        });
-
-        const v7Container = document.createElement('div');
-        v7Container.className = 'v7-arrow-container';
-        const v7Rotate = document.createElement('div');
-        v7Rotate.className = 'v7-rotate-layer';
-        v7Rotate.innerHTML = `<svg width="28" height="28" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="#4b0082" stroke-width="8"/></svg>`;
-        v7Container.appendChild(v7Rotate);
-
-        function updatePos(pos) {
-            userCoords = [pos.coords.longitude, pos.coords.latitude];
-            if (!userMarker) {
-                userMarker = new maplibregl.Marker({ element: v7Container, anchor: 'center' }).setLngLat(userCoords).addTo(map);
-                map.setZoom(15);
-            } else { userMarker.setLngLat(userCoords); }
-            v7Rotate.style.transform = `rotate(${pos.coords.heading || 0}deg)`;
-            if (followUser) map.easeTo({ center: userCoords });
-        }
-        function toggleLock() { followUser = !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }
-        navigator.geolocation.watchPosition(updatePos, null, { enableHighAccuracy: true });
-        map.on('dragstart', () => { if (followUser) toggleLock(); });
-    </script>
-</body>
-</html>
+                    if (i < steps.

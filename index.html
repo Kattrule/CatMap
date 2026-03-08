@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Satellit Glob Pro - Total kontroll</title>
+    <title>Satellit Glob Pro - Tracker Fix</title>
     
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -12,6 +12,7 @@
         :root {
             --indigo: #7582ff;
             --purple: #bd93f9;
+            --dark-purple: #4b0082; /* Mörkare lila för kanten */
             --yellow: #f1fa8c;
             --cyan: #8be9fd;
             --red: #ff5555;
@@ -27,7 +28,6 @@
             border-radius: 12px !important;
             padding: 12px !important;
             color: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.6) !important;
         }
 
         .nav-btn {
@@ -43,10 +43,17 @@
             color: white; display: none; z-index: 2000; font-family: sans-serif;
         }
 
-        .tracker-arrow {
-            width: 50px; height: 50px;
+        /* TRACKER-PILEN */
+        .tracker-arrow-container {
+            width: 35px; height: 35px; /* Krympt storlek */
             display: flex; justify-content: center; align-items: center;
-            filter: drop-shadow(0 0 8px rgba(189, 147, 249, 0.8));
+            filter: drop-shadow(0 0 5px rgba(189, 147, 249, 0.6));
+        }
+
+        /* Detta lager roterar, så att själva markören står kvar */
+        .arrow-rotate-layer {
+            transition: transform 0.2s ease-out;
+            display: flex; justify-content: center; align-items: center;
         }
 
         .map-tools { position: absolute; bottom: 30px; right: 20px; z-index: 1000; }
@@ -91,14 +98,11 @@
             center: [15.0, 62.0],
             zoom: 3,
             projection: 'globe',
-            doubleClickZoom: false,
-            clickTolerance: 10 // Ignorerar små darrningar
+            doubleClickZoom: false
         });
 
         function placePin(lngLat) {
-            // Om användaren rör kartan eller precis dubbelklickat, sätt ingen nål
             if (isMoving) return;
-
             if (pinMarkers.length >= 5) { pinMarkers.shift().remove(); }
             const html = `
                 <div style="text-align:center;">
@@ -113,65 +117,35 @@
             pinMarkers.push(newPin);
         }
 
-        // --- STENHÅRD KONTROLL FÖR LONG-PRESS ---
+        const cancelPin = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
 
-        const cancelPin = () => {
-            if (pressTimer) {
-                clearTimeout(pressTimer);
-                pressTimer = null;
-            }
-        };
+        map.on('movestart', () => { isMoving = true; cancelPin(); });
+        map.on('moveend', () => { isMoving = false; });
 
-        // Om kartan rör sig (zoom, drag, rotate) -> AVBRYT DIREKT
-        map.on('movestart', () => {
-            isMoving = true;
-            cancelPin();
-        });
-
-        map.on('moveend', () => {
-            isMoving = false;
-        });
-
-        // Hantera tryck
         map.on('mousedown', (e) => {
-            isMoving = false; // Anta att vi är stilla vid start
-            cancelPin();
-            pressTimer = setTimeout(() => {
-                if (!isMoving) placePin(e.lngLat);
-            }, 800); // Ökat till 0.8 sek för att inte krocka med zoom
-        });
-
-        map.on('mouseup', cancelPin);
-        map.on('touchstart', (e) => {
-            // Vid touch (mobil), kolla om det är fler än ett finger (zoom-försök)
-            if (e.points && e.points.length > 1) {
-                isMoving = true;
-                cancelPin();
-                return;
-            }
             isMoving = false;
             cancelPin();
-            pressTimer = setTimeout(() => {
-                if (!isMoving) placePin(e.lngLat);
-            }, 800);
+            pressTimer = setTimeout(() => { if (!isMoving) placePin(e.lngLat); }, 800);
         });
-
-        map.on('touchend', cancelPin);
-        map.on('touchcancel', cancelPin);
-
-        // Dubbelklick för att rensa
-        map.on('dblclick', () => {
-            isMoving = true; // Blockera nålar under rensningen
+        map.on('mouseup', cancelPin);
+        
+        map.on('touchstart', (e) => {
+            if (e.points && e.points.length > 1) { isMoving = true; cancelPin(); return; }
+            isMoving = false;
             cancelPin();
-            pinMarkers.forEach(p => p.remove()); 
-            pinMarkers = [];
+            pressTimer = setTimeout(() => { if (!isMoving) placePin(e.lngLat); }, 800);
+        });
+        map.on('touchend', cancelPin);
+
+        map.on('dblclick', () => {
+            isMoving = true; cancelPin();
+            pinMarkers.forEach(p => p.remove()); pinMarkers = [];
             if (map.getLayer('route')) map.removeLayer('route');
             if (map.getSource('route')) map.removeSource('route');
             document.getElementById('routeInfo').style.display = 'none';
             setTimeout(() => { isMoving = false; }, 500);
         });
 
-        // Vägbeskrivning
         async function getDirections(dest) {
             if (!userCoords) return alert("Väntar på GPS...");
             const url = `https://router.project-osrm.org/route/v1/driving/${userCoords[0]},${userCoords[1]};${dest[0]},${dest[1]}?overview=full&geometries=geojson`;
@@ -189,18 +163,30 @@
             } catch (e) { alert("Väg kunde inte hittas."); }
         }
 
-        // Pilen
-        const arrowEl = document.createElement('div');
-        arrowEl.className = 'tracker-arrow';
-        arrowEl.innerHTML = `<svg width="40" height="40" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="#fff" stroke-width="4"/></svg>`;
+        // --- FIX FÖR PILEN ---
+        const arrowContainer = document.createElement('div');
+        arrowContainer.className = 'tracker-arrow-container';
+        
+        const rotationLayer = document.createElement('div');
+        rotationLayer.className = 'arrow-rotate-layer';
+        // SVG med mörkare lila kant (#4b0082)
+        rotationLayer.innerHTML = `
+            <svg width="30" height="30" viewBox="0 0 100 100">
+                <path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="#4b0082" stroke-width="6"/>
+            </svg>
+        `;
+        arrowContainer.appendChild(rotationLayer);
 
         function updatePos(pos) {
             userCoords = [pos.coords.longitude, pos.coords.latitude];
             if (!userMarker) {
-                userMarker = new maplibregl.Marker({ element: arrowEl }).setLngLat(userCoords).addTo(map);
+                userMarker = new maplibregl.Marker({ element: arrowContainer }).setLngLat(userCoords).addTo(map);
                 map.setZoom(15);
             } else { userMarker.setLngLat(userCoords); }
-            arrowEl.style.transform = `rotate(${pos.coords.heading || 0}deg)`;
+            
+            // Roterar bara det inre lagret, så markören inte hoppar
+            rotationLayer.style.transform = `rotate(${pos.coords.heading || 0}deg)`;
+            
             if (followUser) map.easeTo({ center: userCoords });
         }
 

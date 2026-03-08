@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Satellit Glob Pro - Pil-Nav</title>
+    <title>Satellit Glob Pro - V7</title>
     
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -13,17 +13,19 @@
             --indigo: #7582ff;
             --purple: #bd93f9;
             --cyan: #8be9fd;
+            --yellow: #f1fa8c;
+            --route-edge: #2c2c3e; /* Ljusare kant för vägen */
         }
 
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; }
         #map { height: 100%; width: 100%; position: absolute; }
 
         /* DIN POSITION */
-        .v6-arrow-container {
+        .v7-arrow-container {
             width: 28px !important; height: 28px !important;
             display: flex !important; justify-content: center; align-items: center;
         }
-        .v6-rotate-layer {
+        .v7-rotate-layer {
             width: 100%; height: 100%; display: flex; justify-content: center; align-items: center;
             transition: transform 0.2s ease-out;
         }
@@ -40,6 +42,12 @@
             backdrop-filter: blur(10px);
             border: 1px solid var(--indigo);
             border-radius: 12px !important; padding: 12px !important; color: white;
+        }
+
+        .nav-btn {
+            margin-top: 10px; width: 100%; background: var(--indigo);
+            color: white; border: none; padding: 10px; border-radius: 6px;
+            font-weight: bold; cursor: pointer; font-size: 0.8rem;
         }
 
         #routeInfo {
@@ -82,12 +90,9 @@
             center: [15.0, 62.0], zoom: 3, projection: 'globe', doubleClickZoom: false
         });
 
-        // Funktion för att beräkna vinkel mellan två koordinater
         function getBearing(start, end) {
-            const startLat = start[1] * Math.PI / 180;
-            const startLng = start[0] * Math.PI / 180;
-            const endLat = end[1] * Math.PI / 180;
-            const endLng = end[0] * Math.PI / 180;
+            const startLat = start[1] * Math.PI / 180, startLng = start[0] * Math.PI / 180;
+            const endLat = end[1] * Math.PI / 180, endLng = end[0] * Math.PI / 180;
             const y = Math.sin(endLng - startLng) * Math.cos(endLat);
             const x = Math.cos(startLat) * Math.sin(endLat) - Math.sin(startLat) * Math.cos(endLat) * Math.cos(endLng - startLng);
             return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
@@ -109,28 +114,18 @@
                     map.getSource('route').setData(routeData.geometry);
                 } else {
                     map.addSource('route', { type: 'geojson', data: routeData.geometry });
-                    map.addLayer({ id: 'route-casing', type: 'line', source: 'route', paint: { 'line-color': '#000', 'line-width': 9 } });
+                    // LJUSARE KANT PÅ VÄGEN
+                    map.addLayer({ id: 'route-casing', type: 'line', source: 'route', paint: { 'line-color': '#2c2c3e', 'line-width': 9 } });
                     map.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': 5 } });
                 }
 
-                // Skapa pilar för varje steg
                 routeData.legs[0].steps.forEach((step, i, steps) => {
                     if (i < steps.length - 1) {
                         const el = document.createElement('div');
                         el.className = 'turn-arrow-icon';
-                        
-                        // Beräkna vinkeln till nästa steg så pilen pekar rätt
                         const bearing = getBearing(step.maneuver.location, steps[i+1].maneuver.location);
-                        
-                        el.innerHTML = `
-                            <svg width="24" height="24" viewBox="0 0 100 100" style="transform: rotate(${bearing}deg)">
-                                <path d="M50 5 L90 80 L50 60 L10 80 Z" fill="#8be9fd" stroke="#fff" stroke-width="5"/>
-                            </svg>
-                        `;
-                        
-                        const m = new maplibregl.Marker({ element: el })
-                            .setLngLat(step.maneuver.location)
-                            .addTo(map);
+                        el.innerHTML = `<svg width="24" height="24" viewBox="0 0 100 100" style="transform: rotate(${bearing}deg)"><path d="M50 5 L90 80 L50 60 L10 80 Z" fill="#8be9fd" stroke="#fff" stroke-width="5"/></svg>`;
+                        const m = new maplibregl.Marker({ element: el }).setLngLat(step.maneuver.location).addTo(map);
                         turnMarkers.push(m);
                     }
                 });
@@ -140,11 +135,20 @@
             } catch (e) { console.error(e); }
         }
 
-        // --- Logik för nålar ---
         function placePin(lngLat) {
             if (isMoving) return;
             if (pinMarkers.length >= 5) { pinMarkers.shift().remove(); }
-            const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`<div style="text-align:center;"><button style="background:var(--indigo);color:white;border:none;padding:8px;border-radius:4px;" onclick="getDirections([${lngLat.lng}, ${lngLat.lat}])">NAVIGERA</button></div>`);
+            
+            // HÄR ÄR KOORDINATERNA TILLBAKA
+            const html = `
+                <div style="text-align:center;">
+                    <span style="color:var(--yellow); font-size:0.7rem;">POSITION</span><br>
+                    <code style="color:var(--cyan); font-size:0.8rem;">${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}</code>
+                    <button class="nav-btn" onclick="getDirections([${lngLat.lng}, ${lngLat.lat}])">NAVIGERA HIT</button>
+                </div>
+            `;
+            
+            const popup = new maplibregl.Popup({ offset: 25 }).setHTML(html);
             const newPin = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).setPopup(popup).addTo(map);
             newPin.togglePopup();
             pinMarkers.push(newPin);
@@ -164,21 +168,20 @@
             document.getElementById('routeInfo').style.display = 'none';
         });
 
-        // --- Din position ---
-        const v6Container = document.createElement('div');
-        v6Container.className = 'v6-arrow-container';
-        const v6Rotate = document.createElement('div');
-        v6Rotate.className = 'v6-rotate-layer';
-        v6Rotate.innerHTML = `<svg width="28" height="28" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="#4b0082" stroke-width="8"/></svg>`;
-        v6Container.appendChild(v6Rotate);
+        const v7Container = document.createElement('div');
+        v7Container.className = 'v7-arrow-container';
+        const v7Rotate = document.createElement('div');
+        v7Rotate.className = 'v7-rotate-layer';
+        v7Rotate.innerHTML = `<svg width="28" height="28" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="#4b0082" stroke-width="8"/></svg>`;
+        v7Container.appendChild(v7Rotate);
 
         function updatePos(pos) {
             userCoords = [pos.coords.longitude, pos.coords.latitude];
             if (!userMarker) {
-                userMarker = new maplibregl.Marker({ element: v6Container, anchor: 'center' }).setLngLat(userCoords).addTo(map);
+                userMarker = new maplibregl.Marker({ element: v7Container, anchor: 'center' }).setLngLat(userCoords).addTo(map);
                 map.setZoom(15);
             } else { userMarker.setLngLat(userCoords); }
-            v6Rotate.style.transform = `rotate(${pos.coords.heading || 0}deg)`;
+            v7Rotate.style.transform = `rotate(${pos.coords.heading || 0}deg)`;
             if (followUser) map.easeTo({ center: userCoords });
         }
         function toggleLock() { followUser = !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }

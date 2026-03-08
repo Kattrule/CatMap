@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Satellit Glob Pro - Total kontroll</title>
+    <title>Satellit Glob Pro V18</title>
     
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -11,205 +11,218 @@
     <style>
         :root {
             --indigo: #7582ff;
-            --purple: #bd93f9;
-            --yellow: #f1fa8c;
+            --bg-glass: rgba(15, 15, 30, 0.9);
             --cyan: #8be9fd;
+            --yellow: #f1fa8c;
             --red: #ff5555;
+            --green: #50fa7b;
         }
 
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: sans-serif; color: white; }
         #map { height: 100%; width: 100%; position: absolute; }
 
-        .maplibregl-popup-content {
-            background: rgba(15, 15, 30, 0.95) !important;
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--indigo);
-            border-radius: 12px !important;
-            padding: 12px !important;
-            color: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.6) !important;
+        /* SÖKRUTA */
+        #search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 3000; }
+        #search-input {
+            width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--indigo);
+            background: var(--bg-glass); color: white; backdrop-filter: blur(10px); box-sizing: border-box; outline: none;
         }
 
-        .nav-btn {
-            margin-top: 10px; width: 100%; background: var(--indigo);
-            color: white; border: none; padding: 10px; border-radius: 6px;
-            font-weight: bold; cursor: pointer;
+        /* STOPP-LISTA */
+        #stop-list-container {
+            position: absolute; bottom: 100px; left: 10px; width: 220px;
+            max-height: 40vh; overflow-y: auto; z-index: 2000;
+            background: var(--bg-glass); border: 1px solid var(--indigo);
+            border-radius: 10px; padding: 10px; display: none; backdrop-filter: blur(10px);
+        }
+        .stop-item {
+            display: flex; align-items: center; background: rgba(255,255,255,0.1);
+            margin-bottom: 5px; padding: 5px 8px; border-radius: 5px; font-size: 0.8rem;
+        }
+        .stop-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .order-btn { background: none; border: 1px solid #555; color: white; padding: 2px 5px; border-radius: 3px; cursor: pointer; margin-left: 2px; }
+
+        /* NAV-PANEL */
+        #nav-panel {
+            position: absolute; top: 65px; left: 10px; right: 10px; z-index: 2500;
+            background: var(--bg-glass); border: 1px solid var(--cyan);
+            border-radius: 10px; padding: 12px; display: none; backdrop-filter: blur(5px);
         }
 
-        #routeInfo {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(10, 10, 30, 0.9); padding: 10px 20px;
-            border-radius: 20px; border: 1px solid var(--indigo);
-            color: white; display: none; z-index: 2000; font-family: sans-serif;
-        }
+        .maplibregl-popup-content { background: var(--bg-glass) !important; color: white; border: 1px solid var(--indigo); border-radius: 8px !important; text-align: center; }
+        .coord-text { font-family: monospace; font-size: 0.75rem; color: var(--cyan); display: block; margin: 5px 0; }
+        .nav-btn { width: 100%; background: var(--green); color: #000; border: none; padding: 10px; border-radius: 5px; font-weight: bold; margin-top: 8px; cursor: pointer; }
+        .del-btn { width: 100%; background: transparent; color: var(--red); border: 1px solid var(--red); padding: 5px; border-radius: 5px; margin-top: 5px; cursor: pointer; font-size: 0.7rem; }
 
-        .tracker-arrow {
-            width: 50px; height: 50px;
-            display: flex; justify-content: center; align-items: center;
-            filter: drop-shadow(0 0 8px rgba(189, 147, 249, 0.8));
-        }
-
-        .map-tools { position: absolute; bottom: 30px; right: 20px; z-index: 1000; }
-        .tool-btn {
-            width: 65px; height: 65px; background: rgba(10, 10, 30, 0.9);
-            border: 2px solid var(--indigo); border-radius: 50%; color: white;
-            display: flex; justify-content: center; align-items: center;
-            cursor: pointer; font-size: 1.6rem; backdrop-filter: blur(5px);
-        }
+        .map-tools { position: absolute; bottom: 25px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .tool-btn { width: 55px; height: 55px; background: var(--bg-glass); border: 2px solid var(--indigo); border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.3rem; cursor: pointer; }
     </style>
 </head>
 <body>
 
+    <div id="search-container">
+        <input type="text" id="search-input" placeholder="Sök eller håll inne för att lägga till stopp..." autocomplete="off">
+    </div>
+
+    <div id="nav-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div id="turn-info"><b>Navigering aktiv</b><br><span id="turn-dist" style="font-size:0.8rem; color:var(--yellow);"></span></div>
+            <button onclick="clearAll()" style="background:var(--red); border:none; color:white; width:30px; height:30px; border-radius:50%; font-weight:bold; cursor:pointer;">✕</button>
+        </div>
+    </div>
+
+    <div id="stop-list-container">
+        <div style="font-size:0.7rem; color:var(--cyan); margin-bottom:8px; font-weight:bold; letter-spacing:1px;">RUTT-ORDNING</div>
+        <div id="stop-list"></div>
+    </div>
+
     <div id="map"></div>
-    <div id="routeInfo"></div>
 
     <div class="map-tools">
+        <div class="tool-btn" id="hideListBtn" onclick="toggleList()">👁️</div>
         <div class="tool-btn" id="lockBtn" onclick="toggleLock()">🔒</div>
     </div>
 
     <script>
-        let followUser = true;
-        let userMarker = null;
-        let userCoords = null;
-        let pinMarkers = [];
-        let pressTimer = null;
-        let isMoving = false;
+        let followUser = true, showList = true, userMarker = null, userCoords = null;
+        let stops = [], pressTimer = null, isMoving = false;
 
         const map = new maplibregl.Map({
             container: 'map',
             style: {
                 version: 8,
-                sources: {
-                    's-tiles': {
-                        type: 'raster',
-                        tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'],
-                        tileSize: 256
-                    }
-                },
+                sources: { 's-tiles': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], tileSize: 256 } },
                 layers: [{ id: 's-layer', type: 'raster', source: 's-tiles' }]
             },
-            center: [15.0, 62.0],
-            zoom: 3,
-            projection: 'globe',
-            doubleClickZoom: false,
-            clickTolerance: 10 // Ignorerar små darrningar
+            center: [15.0, 62.0], zoom: 4, doubleClickZoom: false
         });
 
         function placePin(lngLat) {
-            // Om användaren rör kartan eller precis dubbelklickat, sätt ingen nål
             if (isMoving) return;
-
-            if (pinMarkers.length >= 5) { pinMarkers.shift().remove(); }
-            const html = `
-                <div style="text-align:center;">
-                    <span style="color:var(--yellow); font-size:0.7rem;">DESTINATION</span><br>
-                    <code style="color:var(--cyan);">${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}</code>
-                    <button class="nav-btn" onclick="getDirections([${lngLat.lng}, ${lngLat.lat}])">HÄMTA VÄG</button>
-                </div>
-            `;
-            const popup = new maplibregl.Popup({ offset: 25 }).setHTML(html);
-            const newPin = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).setPopup(popup).addTo(map);
-            newPin.togglePopup();
-            pinMarkers.push(newPin);
+            const id = Date.now();
+            const marker = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).addTo(map);
+            
+            const stopObj = { id, marker, lngLat, name: `Stopp ${stops.length + 1}` };
+            stops.push(stopObj);
+            
+            updateUI();
+            if (document.getElementById('nav-panel').style.display === 'block') updateRoute();
+            marker.togglePopup();
         }
 
-        // --- STENHÅRD KONTROLL FÖR LONG-PRESS ---
+        function updateUI() {
+            const list = document.getElementById('stop-list');
+            const container = document.getElementById('stop-list-container');
+            list.innerHTML = '';
+            
+            if (stops.length > 0 && showList) {
+                container.style.display = 'block';
+                stops.forEach((s, i) => {
+                    const coordsText = `${s.lngLat.lat.toFixed(5)}, ${s.lngLat.lng.toFixed(5)}`;
+                    s.marker.setPopup(new maplibregl.Popup({offset:25}).setHTML(`
+                        <div>
+                            <b style="color:var(--indigo)">${s.name}</b>
+                            <span class="coord-text">${coordsText}</span>
+                            <button class="nav-btn" onclick="updateRoute()">STARTA RUTT</button>
+                            <button class="del-btn" onclick="removeStop(${s.id})">TA BORT STOPP</button>
+                        </div>
+                    `));
 
-        const cancelPin = () => {
-            if (pressTimer) {
-                clearTimeout(pressTimer);
-                pressTimer = null;
+                    const item = document.createElement('div');
+                    item.className = 'stop-item';
+                    item.innerHTML = `
+                        <span class="stop-name">${i+1}. ${s.name}</span>
+                        <div class="stop-controls">
+                            <button class="order-btn" onclick="moveStop(${i}, -1)">▲</button>
+                            <button class="order-btn" onclick="moveStop(${i}, 1)">▼</button>
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
+            } else {
+                container.style.display = 'none';
             }
-        };
+        }
 
-        // Om kartan rör sig (zoom, drag, rotate) -> AVBRYT DIREKT
-        map.on('movestart', () => {
-            isMoving = true;
-            cancelPin();
-        });
+        window.toggleList = function() {
+            showList = !showList;
+            document.getElementById('hideListBtn').innerText = showList ? "👁️" : "🙈";
+            updateUI();
+        }
 
-        map.on('moveend', () => {
-            isMoving = false;
-        });
-
-        // Hantera tryck
-        map.on('mousedown', (e) => {
-            isMoving = false; // Anta att vi är stilla vid start
-            cancelPin();
-            pressTimer = setTimeout(() => {
-                if (!isMoving) placePin(e.lngLat);
-            }, 800); // Ökat till 0.8 sek för att inte krocka med zoom
-        });
-
-        map.on('mouseup', cancelPin);
-        map.on('touchstart', (e) => {
-            // Vid touch (mobil), kolla om det är fler än ett finger (zoom-försök)
-            if (e.points && e.points.length > 1) {
-                isMoving = true;
-                cancelPin();
-                return;
+        window.moveStop = function(index, direction) {
+            const newIndex = index + direction;
+            if (newIndex >= 0 && newIndex < stops.length) {
+                const temp = stops[index];
+                stops[index] = stops[newIndex];
+                stops[newIndex] = temp;
+                updateUI();
+                if (document.getElementById('nav-panel').style.display === 'block') updateRoute();
             }
-            isMoving = false;
-            cancelPin();
-            pressTimer = setTimeout(() => {
-                if (!isMoving) placePin(e.lngLat);
-            }, 800);
-        });
+        }
 
-        map.on('touchend', cancelPin);
-        map.on('touchcancel', cancelPin);
+        window.removeStop = function(id) {
+            const idx = stops.findIndex(s => s.id === id);
+            if (idx !== -1) {
+                stops[idx].marker.remove();
+                stops.splice(idx, 1);
+                updateUI();
+                if (stops.length === 0) clearAll();
+                else if (document.getElementById('nav-panel').style.display === 'block') updateRoute();
+            }
+        }
 
-        // Dubbelklick för att rensa
-        map.on('dblclick', () => {
-            isMoving = true; // Blockera nålar under rensningen
-            cancelPin();
-            pinMarkers.forEach(p => p.remove()); 
-            pinMarkers = [];
-            if (map.getLayer('route')) map.removeLayer('route');
-            if (map.getSource('route')) map.removeSource('route');
-            document.getElementById('routeInfo').style.display = 'none';
-            setTimeout(() => { isMoving = false; }, 500);
-        });
-
-        // Vägbeskrivning
-        async function getDirections(dest) {
-            if (!userCoords) return alert("Väntar på GPS...");
-            const url = `https://router.project-osrm.org/route/v1/driving/${userCoords[0]},${userCoords[1]};${dest[0]},${dest[1]}?overview=full&geometries=geojson`;
+        window.updateRoute = async function() {
+            if (!userCoords || stops.length === 0) return;
+            const coords = [userCoords, ...stops.map(s => [s.lngLat.lng, s.lngLat.lat])];
+            const url = `https://router.project-osrm.org/route/v1/driving/${coords.map(c => c.join(',')).join(';')}?overview=full&geometries=geojson&steps=true`;
+            
             try {
                 const res = await fetch(url);
                 const data = await res.json();
-                const geometry = data.routes[0].geometry;
-                if (map.getSource('route')) { map.getSource('route').setData(geometry); } 
+                const route = data.routes[0];
+
+                if (map.getSource('route')) { map.getSource('route').setData(route.geometry); } 
                 else {
-                    map.addSource('route', { type: 'geojson', data: geometry });
-                    map.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': 5 } });
+                    map.addSource('route', { type: 'geojson', data: route.geometry });
+                    map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': 6 } });
                 }
-                document.getElementById('routeInfo').innerHTML = `Rutt: <b>${(data.routes[0].distance / 1000).toFixed(1)} km</b>`;
-                document.getElementById('routeInfo').style.display = 'block';
-            } catch (e) { alert("Väg kunde inte hittas."); }
+
+                document.getElementById('turn-dist').innerText = `Total rutt: ${(route.distance/1000).toFixed(1)} km`;
+                document.getElementById('nav-panel').style.display = 'block';
+                stops.forEach(s => s.marker.getPopup().remove());
+            } catch (e) {}
         }
 
-        // Pilen
-        const arrowEl = document.createElement('div');
-        arrowEl.className = 'tracker-arrow';
-        arrowEl.innerHTML = `<svg width="40" height="40" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="#fff" stroke-width="4"/></svg>`;
+        window.clearAll = function() {
+            stops.forEach(s => s.marker.remove());
+            stops = [];
+            if (map.getSource('route')) { map.removeLayer('route-line'); map.removeSource('route'); }
+            document.getElementById('nav-panel').style.display = 'none';
+            updateUI();
+        }
 
-        function updatePos(pos) {
+        map.on('movestart', () => isMoving = true);
+        map.on('moveend', () => isMoving = false);
+        map.on('mousedown', (e) => pressTimer = setTimeout(() => placePin(e.lngLat), 800));
+        map.on('mouseup', () => clearTimeout(pressTimer));
+        map.on('touchstart', (e) => { if(e.points.length === 1) pressTimer = setTimeout(() => placePin(e.lngLat), 800); });
+        map.on('touchend', () => clearTimeout(pressTimer));
+
+        const myEl = document.createElement('div');
+        myEl.innerHTML = `<svg width="30" height="30" viewBox="0 0 100 100" id="me"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="black" stroke-width="5"/></svg>`;
+        
+        navigator.geolocation.watchPosition(pos => {
             userCoords = [pos.coords.longitude, pos.coords.latitude];
             if (!userMarker) {
-                userMarker = new maplibregl.Marker({ element: arrowEl }).setLngLat(userCoords).addTo(map);
-                map.setZoom(15);
+                userMarker = new maplibregl.Marker({ element: myEl }).setLngLat(userCoords).addTo(map);
+                map.setCenter(userCoords); map.setZoom(15);
             } else { userMarker.setLngLat(userCoords); }
-            arrowEl.style.transform = `rotate(${pos.coords.heading || 0}deg)`;
+            document.getElementById('me').style.transform = `rotate(${pos.coords.heading || 0}deg)`;
             if (followUser) map.easeTo({ center: userCoords });
-        }
+        }, null, { enableHighAccuracy: true });
 
-        function toggleLock() {
-            followUser = !followUser;
-            document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓";
-        }
-
-        navigator.geolocation.watchPosition(updatePos, null, { enableHighAccuracy: true });
+        function toggleLock() { followUser = !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }
         map.on('dragstart', () => { if (followUser) toggleLock(); });
     </script>
 </body>

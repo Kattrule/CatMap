@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Satellit Glob Pro V17 - Multi-Route</title>
+    <title>Satellit Glob Pro V19</title>
     
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -16,6 +16,7 @@
             --yellow: #f1fa8c;
             --red: #ff5555;
             --green: #50fa7b;
+            --orange: #ffb86c;
         }
 
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: sans-serif; color: white; }
@@ -25,10 +26,10 @@
         #search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 3000; }
         #search-input {
             width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--indigo);
-            background: var(--bg-glass); color: white; backdrop-filter: blur(10px); box-sizing: border-box;
+            background: var(--bg-glass); color: white; backdrop-filter: blur(10px); box-sizing: border-box; outline: none;
         }
 
-        /* STOPP-LISTA (FLYTTBAR ORDNING) */
+        /* STOPP-LISTA */
         #stop-list-container {
             position: absolute; bottom: 100px; left: 10px; width: 220px;
             max-height: 40vh; overflow-y: auto; z-index: 2000;
@@ -40,8 +41,7 @@
             margin-bottom: 5px; padding: 5px 8px; border-radius: 5px; font-size: 0.8rem;
         }
         .stop-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .stop-controls { display: flex; gap: 5px; }
-        .order-btn { background: none; border: 1px solid #555; color: white; padding: 2px 5px; border-radius: 3px; cursor: pointer; }
+        .order-btn { background: none; border: 1px solid #555; color: white; padding: 2px 5px; border-radius: 3px; cursor: pointer; margin-left: 2px; }
 
         /* NAV-PANEL */
         #nav-panel {
@@ -50,25 +50,28 @@
             border-radius: 10px; padding: 12px; display: none; backdrop-filter: blur(5px);
         }
 
-        .maplibregl-popup-content { background: var(--bg-glass) !important; color: white; border: 1px solid var(--indigo); border-radius: 8px !important; }
+        /* POPUP STYLES */
+        .maplibregl-popup-content { background: var(--bg-glass) !important; color: white; border: 1px solid var(--indigo); border-radius: 8px !important; text-align: center; padding: 15px !important; }
+        .coord-text { font-family: monospace; font-size: 0.75rem; color: var(--cyan); display: block; margin: 5px 0; }
+        
         .nav-btn { width: 100%; background: var(--green); color: #000; border: none; padding: 10px; border-radius: 5px; font-weight: bold; margin-top: 8px; cursor: pointer; }
-        .del-btn { width: 100%; background: transparent; color: var(--red); border: 1px solid var(--red); padding: 5px; border-radius: 5px; margin-top: 5px; cursor: pointer; font-size: 0.7rem; }
+        .google-btn { width: 100%; background: var(--orange); color: #000; border: none; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 5px; cursor: pointer; font-size: 0.75rem; }
+        .del-btn { width: 100%; background: transparent; color: var(--red); border: 1px solid var(--red); padding: 5px; border-radius: 5px; margin-top: 8px; cursor: pointer; font-size: 0.7rem; }
 
-        .map-tools { position: absolute; bottom: 25px; right: 20px; z-index: 1000; }
-        .tool-btn { width: 55px; height: 55px; background: var(--bg-glass); border: 2px solid var(--indigo); border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.3rem; }
+        .map-tools { position: absolute; bottom: 25px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .tool-btn { width: 55px; height: 55px; background: var(--bg-glass); border: 2px solid var(--indigo); border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.3rem; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <div id="search-container">
-        <input type="text" id="search-input" placeholder="Sök eller håll inne på kartan..." autocomplete="off">
-        <div id="search-results" style="background:var(--bg-glass); display:none; border-radius:10px; margin-top:5px; border:1px solid var(--indigo);"></div>
+        <input type="text" id="search-input" placeholder="Sök eller håll inne för att lägga till stopp..." autocomplete="off">
     </div>
 
     <div id="nav-panel">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <div id="turn-info"><b>Navigering aktiv</b><br><span id="turn-dist" style="font-size:0.8rem; color:var(--yellow);"></span></div>
-            <button onclick="clearAll()" style="background:var(--red); border:none; color:white; width:30px; height:30px; border-radius:50%; font-weight:bold;">✕</button>
+            <button onclick="clearAll()" style="background:var(--red); border:none; color:white; width:30px; height:30px; border-radius:50%; font-weight:bold; cursor:pointer;">✕</button>
         </div>
     </div>
 
@@ -78,10 +81,14 @@
     </div>
 
     <div id="map"></div>
-    <div class="map-tools"><div class="tool-btn" id="lockBtn" onclick="toggleLock()">🔒</div></div>
+
+    <div class="map-tools">
+        <div class="tool-btn" id="hideListBtn" onclick="toggleList()">👁️</div>
+        <div class="tool-btn" id="lockBtn" onclick="toggleLock()">🔒</div>
+    </div>
 
     <script>
-        let followUser = true, userMarker = null, userCoords = null;
+        let followUser = true, showList = true, userMarker = null, userCoords = null;
         let stops = [], pressTimer = null, isMoving = false;
 
         const map = new maplibregl.Map({
@@ -94,7 +101,6 @@
             center: [15.0, 62.0], zoom: 4, doubleClickZoom: false
         });
 
-        // --- HANTERA STOPP ---
         function placePin(lngLat) {
             if (isMoving) return;
             const id = Date.now();
@@ -105,6 +111,7 @@
             
             updateUI();
             if (document.getElementById('nav-panel').style.display === 'block') updateRoute();
+            marker.togglePopup();
         }
 
         function updateUI() {
@@ -112,14 +119,20 @@
             const container = document.getElementById('stop-list-container');
             list.innerHTML = '';
             
-            if (stops.length > 0) {
+            if (stops.length > 0 && showList) {
                 container.style.display = 'block';
                 stops.forEach((s, i) => {
+                    const lat = s.lngLat.lat;
+                    const lng = s.lngLat.lng;
+                    const coordsText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+                    
                     s.marker.setPopup(new maplibregl.Popup({offset:25}).setHTML(`
-                        <div style="text-align:center;">
-                            <b style="color:var(--indigo)">${s.name}</b><br>
+                        <div>
+                            <b style="color:var(--indigo)">${s.name}</b>
+                            <span class="coord-text">${coordsText}</span>
                             <button class="nav-btn" onclick="updateRoute()">STARTA RUTT</button>
-                            <button class="del-btn" onclick="removeStop(${s.id})">TA BORT</button>
+                            <button class="google-btn" onclick="openGoogleMaps(${lat}, ${lng})">🖼️ BILDER & RECENSIONER</button>
+                            <button class="del-btn" onclick="removeStop(${s.id})">TA BORT STOPP</button>
                         </div>
                     `));
 
@@ -137,6 +150,18 @@
             } else {
                 container.style.display = 'none';
             }
+        }
+
+        window.openGoogleMaps = function(lat, lng) {
+            // Skapar en länk som öppnar Google Maps appen eller webbsidan på rätt plats
+            const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+            window.open(url, '_blank');
+        }
+
+        window.toggleList = function() {
+            showList = !showList;
+            document.getElementById('hideListBtn').innerText = showList ? "👁️" : "🙈";
+            updateUI();
         }
 
         window.moveStop = function(index, direction) {
@@ -161,7 +186,6 @@
             }
         }
 
-        // --- RUTT-LOGIK ---
         window.updateRoute = async function() {
             if (!userCoords || stops.length === 0) return;
             const coords = [userCoords, ...stops.map(s => [s.lngLat.lng, s.lngLat.lat])];
@@ -192,7 +216,6 @@
             updateUI();
         }
 
-        // --- KONTROLLER ---
         map.on('movestart', () => isMoving = true);
         map.on('moveend', () => isMoving = false);
         map.on('mousedown', (e) => pressTimer = setTimeout(() => placePin(e.lngLat), 800));
@@ -200,7 +223,6 @@
         map.on('touchstart', (e) => { if(e.points.length === 1) pressTimer = setTimeout(() => placePin(e.lngLat), 800); });
         map.on('touchend', () => clearTimeout(pressTimer));
 
-        // --- GPS ---
         const myEl = document.createElement('div');
         myEl.innerHTML = `<svg width="30" height="30" viewBox="0 0 100 100" id="me"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="black" stroke-width="5"/></svg>`;
         

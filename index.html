@@ -49,24 +49,27 @@
         #instruction-text { font-size: 1.1rem; font-weight: bold; color: var(--green); display: block; margin-bottom: 5px; }
         #distance-remaining { font-size: 0.9rem; color: var(--yellow); }
 
-        /* STOPP-LISTA (Återställd) */
+        /* STOPP-LISTA */
         #stop-list-container {
-            position: absolute; bottom: 100px; left: 10px; width: 220px;
+            position: absolute; bottom: 100px; left: 10px; width: 240px;
             max-height: 35vh; overflow-y: auto; z-index: 2000;
             background: var(--bg-glass); border: 1px solid var(--indigo);
             border-radius: 10px; padding: 10px; display: none; backdrop-filter: blur(10px);
         }
         .stop-item {
             display: flex; align-items: center; background: rgba(255,255,255,0.1);
-            margin-bottom: 5px; padding: 5px 8px; border-radius: 5px; font-size: 0.8rem;
+            margin-bottom: 5px; padding: 8px; border-radius: 5px; font-size: 0.8rem; gap: 5px;
         }
-        .stop-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .order-btn { background: none; border: 1px solid #555; color: white; padding: 2px 5px; border-radius: 3px; cursor: pointer; margin-left: 2px; }
+        .stop-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+        .order-btn { background: none; border: 1px solid #555; color: white; padding: 2px 5px; border-radius: 3px; cursor: pointer; }
+        .edit-btn-small { background: none; border: none; color: var(--cyan); cursor: pointer; font-size: 1rem; }
         .clear-all-btn { width: 100%; background: var(--red); color: white; border: none; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; cursor: pointer; font-size: 0.8rem; }
 
         /* POPUP STYLES */
-        .maplibregl-popup-content { background: var(--bg-glass) !important; color: white; border: 1px solid var(--indigo); border-radius: 8px !important; text-align: center; padding: 15px !important; }
+        .maplibregl-popup-content { background: var(--bg-glass) !important; color: white; border: 1px solid var(--indigo); border-radius: 8px !important; text-align: center; padding: 15px !important; min-width: 150px; }
+        .popup-title { display: block; font-weight: bold; margin-bottom: 10px; color: var(--indigo); font-size: 1.1rem; }
         .nav-btn { width: 100%; background: var(--green); color: #000; border: none; padding: 10px; border-radius: 5px; font-weight: bold; margin-top: 8px; cursor: pointer; }
+        .edit-btn { width: 100%; background: var(--cyan); color: #000; border: none; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 5px; cursor: pointer; font-size: 0.8rem; }
         .del-btn { width: 100%; background: transparent; color: var(--red); border: 1px solid var(--red); padding: 5px; border-radius: 5px; margin-top: 8px; cursor: pointer; font-size: 0.7rem; }
 
         .map-tools { position: absolute; bottom: 25px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
@@ -101,7 +104,7 @@
     <div class="map-tools">
         <div class="tool-btn" id="hideListBtn" onclick="toggleList()">👁️</div>
         <div class="tool-btn" id="lockBtn" onclick="toggleLock()">🔒</div>
-        <div class="tool-btn" onclick="speak('Röstnavigering redo')">🔊</div>
+        <div class="tool-btn" onclick="speak('Redo')">🔊</div>
     </div>
 
     <script>
@@ -143,7 +146,6 @@
         searchInput.addEventListener('input', async (e) => {
             const query = e.target.value.trim();
             if (query.length < 3) { searchResults.style.display = 'none'; return; }
-            
             searchResults.innerHTML = '';
             const isCoord = parseCoords(query);
 
@@ -153,7 +155,7 @@
                 div.innerHTML = `📍 Placera nål: ${isCoord.lat}, ${isCoord.lng}`;
                 div.onclick = () => {
                     map.flyTo({ center: [isCoord.lng, isCoord.lat], zoom: 15 });
-                    addStop(isCoord.lat, isCoord.lng, `Koord: ${isCoord.lat.toFixed(4)}`);
+                    addStop(isCoord.lat, isCoord.lng, `Koordinat`);
                     closeSearch();
                 };
                 searchResults.appendChild(div);
@@ -186,7 +188,23 @@
             const marker = new maplibregl.Marker({ color: "#ff5555" }).setLngLat([lng, lat]).addTo(map);
             stops.push({ id, lat, lng, name, marker });
             updateUI();
-            if (document.getElementById('nav-instruction-panel').style.display === 'block') startNavigation();
+            
+            // Öppna popup direkt så man kan starta rutt eller ändra namn
+            setTimeout(() => {
+                marker.getElement().click();
+            }, 200);
+        }
+
+        // NAMNÄNDRING
+        window.renameStop = function(id) {
+            const stop = stops.find(s => s.id === id);
+            if (stop) {
+                const newName = prompt("Ange nytt namn för stoppet:", stop.name);
+                if (newName !== null && newName.trim() !== "") {
+                    stop.name = newName.trim();
+                    updateUI();
+                }
+            }
         }
 
         function updateUI() {
@@ -197,16 +215,19 @@
             if (stops.length > 0 && showList) {
                 container.style.display = 'block';
                 stops.forEach((s, i) => {
+                    // Uppdatera popupen med rätt knappar
                     s.marker.setPopup(new maplibregl.Popup({offset:25}).setHTML(`
-                        <b style="color:var(--indigo)">${s.name}</b><br>
+                        <span class="popup-title">${s.name}</span>
                         <button class="nav-btn" onclick="startNavigation()">STARTA RUTT</button>
+                        <button class="edit-btn" onclick="renameStop(${s.id})">✏️ ÄNDRA NAMN</button>
                         <button class="del-btn" onclick="removeStop(${s.id})">TA BORT</button>
                     `));
 
                     const item = document.createElement('div');
                     item.className = 'stop-item';
                     item.innerHTML = `
-                        <span class="stop-name">${i+1}. ${s.name}</span>
+                        <span class="stop-name" onclick="renameStop(${s.id})">${i+1}. ${s.name}</span>
+                        <button class="edit-btn-small" onclick="renameStop(${s.id})">✏️</button>
                         <button class="order-btn" onclick="moveStop(${i}, -1)">▲</button>
                         <button class="order-btn" onclick="moveStop(${i}, 1)">▼</button>
                     `;
@@ -223,26 +244,37 @@
 
         window.removeStop = function(id) {
             const idx = stops.findIndex(s => s.id === id);
-            if (idx !== -1) { stops[idx].marker.remove(); stops.splice(idx, 1); updateUI(); if(stops.length === 0) stopNavigation(); }
+            if (idx !== -1) { 
+                stops[idx].marker.getPopup().remove();
+                stops[idx].marker.remove(); 
+                stops.splice(idx, 1); 
+                updateUI(); 
+                if(stops.length === 0) stopNavigation(); 
+            }
         }
 
         window.moveStop = function(idx, dir) {
             const newIdx = idx + dir;
             if (newIdx >= 0 && newIdx < stops.length) {
                 [stops[idx], stops[newIdx]] = [stops[newIdx], stops[idx]];
-                updateUI(); startNavigation();
+                updateUI();
+                if (document.getElementById('nav-instruction-panel').style.display === 'block') startNavigation();
             }
         }
 
         // NAVIGATION
         window.startNavigation = async function() {
-            if (!userCoords || stops.length === 0) return;
+            if (!userCoords) { alert("Väntar på GPS..."); return; }
+            if (stops.length === 0) return;
+            
             const coords = [userCoords, ...stops.map(s => [s.lng, s.lat])];
             const url = `https://router.project-osrm.org/route/v1/driving/${coords.map(c => c.join(',')).join(';')}?overview=full&geometries=geojson&steps=true&language=sv`;
             
             try {
                 const res = await fetch(url);
                 const data = await res.json();
+                if (!data.routes || data.routes.length === 0) return;
+                
                 const route = data.routes[0];
 
                 if (map.getSource('route')) { map.getSource('route').setData(route.geometry); } 
@@ -258,7 +290,10 @@
                 document.getElementById('nav-instruction-panel').style.display = 'block';
 
                 if (instr !== lastInstruction) { speak(instr); lastInstruction = instr; }
-            } catch (e) {}
+                
+                // Stäng popups när rutt startar
+                stops.forEach(s => s.marker.getPopup().remove());
+            } catch (e) { console.error("Ruttfel:", e); }
         }
 
         window.stopNavigation = function() {
@@ -292,7 +327,7 @@
         function toggleLock(val) { followUser = (val !== undefined) ? val : !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }
         map.on('dragstart', () => toggleLock(false));
 
-        // LÅNGTRYCK FÖR ATT SÄTTA NÅL
+        // LÅNGTRYCK
         map.on('mousedown', (e) => pressTimer = setTimeout(() => addStop(e.lngLat.lat, e.lngLat.lng, "Vald punkt"), 800));
         map.on('mouseup', () => clearTimeout(pressTimer));
         map.on('touchstart', (e) => { if(e.points.length === 1) pressTimer = setTimeout(() => addStop(e.lngLat.lat, e.lngLat.lng, "Vald punkt"), 800); });

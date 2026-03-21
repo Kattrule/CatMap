@@ -6,9 +6,11 @@
     <title>CatMap</title>
     
     <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <meta name="theme-color" content="#000000">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -31,7 +33,7 @@
         #search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 3000; }
         #search-input {
             width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--indigo);
-            background: var(--bg-glass); color: white; backdrop-filter: blur(10px); box-sizing: border-box; outline: none;
+            background: var(--bg-glass); color: white; backdrop-filter: blur(10px); box-sizing: border-box; outline: none; font-size: 1rem;
         }
         #search-results {
             background: var(--bg-glass); border: 1px solid var(--indigo); border-top: none;
@@ -79,7 +81,7 @@
 <body>
 
     <div id="search-container">
-        <input type="text" id="search-input" placeholder="Sök eller håll inne för att lägga till stopp..." autocomplete="off">
+        <input type="text" id="search-input" placeholder="Sök plats eller klistra in koordinater..." autocomplete="off">
         <div id="search-results"></div>
     </div>
 
@@ -122,9 +124,26 @@
             center: [15.0, 62.0], zoom: 4, doubleClickZoom: false
         });
 
-        // --- SÖKFUNKTION MED FÖRSLAG ---
+        // --- SÖKFUNKTION & KOORDINAT-LÄSARE ---
         const searchInput = document.getElementById('search-input');
         const searchResults = document.getElementById('search-results');
+
+        // Hjälpfunktion för att kolla om texten är koordinater
+        function parseCoordinates(input) {
+            // Tar bort allt förutom siffror, punkter, kommatecken, minus/plus och mellanslag
+            const cleanStr = input.replace(/[^\d.,\-+\s]/g, '').trim();
+            const parts = cleanStr.split(/[\s,]+/); // Delar upp vid mellanslag eller kommatecken
+            
+            if (parts.length === 2) {
+                const lat = parseFloat(parts[0]);
+                const lng = parseFloat(parts[1]);
+                // Kollar så det är rimliga GPS-värden
+                if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                    return { lat, lng };
+                }
+            }
+            return null;
+        }
 
         searchInput.addEventListener('input', (e) => {
             clearTimeout(searchTimeout);
@@ -135,6 +154,27 @@
                 return;
             }
 
+            // Kollar om användaren skrev in koordinater
+            const isCoord = parseCoordinates(query);
+            if (isCoord) {
+                searchResults.innerHTML = '';
+                const div = document.createElement('div');
+                div.className = 'search-item';
+                div.innerHTML = `📍 Placera nål på koordinat:<br><span style="color:var(--cyan); font-family:monospace;">${isCoord.lat}, ${isCoord.lng}</span>`;
+                div.onclick = () => {
+                    map.flyTo({ center: [isCoord.lng, isCoord.lat], zoom: 15 });
+                    placePin({ lng: isCoord.lng, lat: isCoord.lat }, `Koord: ${isCoord.lat}, ${isCoord.lng}`);
+                    searchResults.style.display = 'none';
+                    searchInput.value = '';
+                    followUser = false;
+                    document.getElementById('lockBtn').innerText = "🔓";
+                };
+                searchResults.appendChild(div);
+                searchResults.style.display = 'block';
+                return; // Avbryt vanliga sökningen
+            }
+
+            // Vanlig OpenStreetMap Sökning (om det inte var koordinater)
             searchTimeout = setTimeout(async () => {
                 try {
                     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
@@ -186,7 +226,6 @@
             updateUI();
             if (document.getElementById('nav-panel').style.display === 'block') updateRoute();
             
-            // Få fram popupen direkt
             setTimeout(() => {
                 const markerElement = marker.getElement();
                 if(markerElement) markerElement.click();

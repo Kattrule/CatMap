@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CatMap Pro</title>
+    <title>CatMap</title>
     
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -11,7 +11,7 @@
     <style>
         :root {
             --indigo: #7582ff;
-            --bg-glass: rgba(15, 15, 30, 0.9);
+            --bg-glass: rgba(15, 15, 30, 0.95);
             --cyan: #8be9fd;
             --yellow: #f1fa8c;
             --red: #ff5555;
@@ -28,6 +28,16 @@
             background: var(--bg-glass); color: white; backdrop-filter: blur(10px); box-sizing: border-box; outline: none;
         }
 
+        /* NAV-PANEL (Vägbeskrivning under sökfältet) */
+        #nav-panel {
+            position: absolute; top: 65px; left: 10px; right: 10px; z-index: 2500;
+            background: var(--bg-glass); border: 1px solid var(--cyan);
+            border-radius: 10px; padding: 15px; display: none; backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        #instruction-text { font-size: 1.1rem; font-weight: bold; color: #fff; display: block; margin-bottom: 5px; }
+        #turn-dist { font-size: 0.9rem; color: var(--yellow); font-family: monospace; }
+
         /* STOPP-LISTA */
         #stop-list-container {
             position: absolute; bottom: 100px; left: 10px; width: 220px;
@@ -40,33 +50,16 @@
             margin-bottom: 5px; padding: 5px 8px; border-radius: 5px; font-size: 0.8rem;
         }
         .stop-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .order-btn { background: none; border: 1px solid #555; color: white; padding: 2px 5px; border-radius: 3px; cursor: pointer; margin-left: 2px; }
-
-        /* HISTORIK-PANEL */
-        #history-container {
-            position: absolute; top: 130px; right: 10px; width: 200px;
-            max-height: 40vh; overflow-y: auto; z-index: 2000;
-            background: var(--bg-glass); border: 1px solid var(--purple);
-            border-radius: 10px; padding: 10px; display: none; backdrop-filter: blur(10px);
-        }
-        .history-item { background: rgba(189,147,249,0.1); border: 1px solid rgba(189,147,249,0.3); margin-bottom: 8px; padding: 8px; border-radius: 6px; font-size: 0.75rem; }
-        .hist-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 5px; }
-        .hist-btn { padding: 4px; font-size: 0.6rem; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; }
-
-        /* NAV-PANEL */
-        #nav-panel {
-            position: absolute; top: 65px; left: 10px; right: 10px; z-index: 2500;
-            background: var(--bg-glass); border: 1px solid var(--cyan);
-            border-radius: 10px; padding: 12px; display: none; backdrop-filter: blur(5px);
-        }
-
-        /* POPUP & KNAPPAR */
-        .maplibregl-popup-content { background: var(--bg-glass) !important; color: white; border: 1px solid var(--indigo); border-radius: 8px !important; text-align: center; padding: 15px !important; }
-        .nav-btn-main { width: 100%; background: var(--green); color: #000; border: none; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; cursor: pointer; text-transform: uppercase; font-size: 0.7rem; }
-        .del-btn { width: 100%; background: transparent; color: var(--red); border: 1px solid var(--red); padding: 5px; border-radius: 5px; margin-top: 8px; cursor: pointer; font-size: 0.7rem; }
-
+        
+        /* KNAPPAR */
+        .btn-group { display: flex; gap: 5px; margin-top: 10px; }
+        .nav-btn-main { flex: 2; background: var(--green); color: #000; border: none; padding: 10px; border-radius: 5px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 0.7rem; }
+        .clear-btn-small { flex: 1; background: var(--red); color: #fff; border: none; padding: 10px; border-radius: 5px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 0.7rem; }
+        
         .map-tools { position: absolute; bottom: 25px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
         .tool-btn { width: 55px; height: 55px; background: var(--bg-glass); border: 2px solid var(--indigo); border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.3rem; cursor: pointer; }
+
+        .voice-indicator { float: right; font-size: 1.2rem; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -76,37 +69,36 @@
     </div>
 
     <div id="nav-panel">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div id="turn-info"><b>Navigering aktiv</b><br><span id="turn-dist" style="font-size:0.8rem; color:var(--yellow);"></span></div>
-            <div style="display:flex; gap:10px;">
-                <button onclick="saveCurrentRoute()" style="background:var(--purple); border:none; color:white; padding:5px 10px; border-radius:5px; font-size:0.7rem; font-weight:bold; cursor:pointer;">SPARA</button>
-                <button onclick="clearAll()" style="background:var(--red); border:none; color:white; width:30px; height:30px; border-radius:50%; font-weight:bold; cursor:pointer;">✕</button>
-            </div>
+        <div class="voice-indicator" onclick="repeatInstruction()">🔊</div>
+        <div id="instruction-box">
+            <span id="instruction-text">Beräknar rutt...</span>
+            <span id="turn-dist">0 km kvar</span>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:10px;">
+            <button onclick="saveCurrentRoute()" style="background:var(--purple); border:none; color:white; padding:8px; border-radius:5px; font-size:0.7rem; font-weight:bold; flex:1;">SPARA RUTT</button>
+            <button onclick="clearAll()" style="background:var(--red); border:none; color:white; padding:8px; border-radius:5px; font-size:0.7rem; font-weight:bold; flex:1;">AVSLUTA</button>
         </div>
     </div>
 
     <div id="stop-list-container">
-        <div style="font-size:0.7rem; color:var(--cyan); margin-bottom:8px; font-weight:bold; letter-spacing:1px;">STOPP</div>
+        <div style="font-size:0.7rem; color:var(--cyan); margin-bottom:8px; font-weight:bold; letter-spacing:1px;">AKTUELL RUTT</div>
         <div id="stop-list"></div>
-        <button class="nav-btn-main" onclick="updateRoute()">Starta rutt</button>
-    </div>
-
-    <div id="history-container">
-        <div style="font-size:0.7rem; color:var(--purple); margin-bottom:8px; font-weight:bold; letter-spacing:1px;">SPARADE TASSAVTRYCK</div>
-        <div id="history-list"></div>
+        <div class="btn-group">
+            <button class="nav-btn-main" onclick="updateRoute()">Starta rutt</button>
+            <button class="clear-btn-small" onclick="clearAll()">Töm</button>
+        </div>
     </div>
 
     <div id="map"></div>
 
     <div class="map-tools">
         <div class="tool-btn" style="border-color:var(--purple)" onclick="toggleHistory()">📜</div>
-        <div class="tool-btn" id="hideListBtn" onclick="toggleList()">👁️</div>
         <div class="tool-btn" id="lockBtn" onclick="toggleLock()">🔒</div>
     </div>
 
     <script>
-        let followUser = true, showList = true, showHistory = false, userMarker = null, userCoords = null;
-        let stops = [], pressTimer = null, isMapMoving = false;
+        let followUser = true, showList = true, userMarker = null, userCoords = null;
+        let stops = [], isMapMoving = false, currentInstructions = [];
 
         const map = new maplibregl.Map({
             container: 'map',
@@ -118,6 +110,21 @@
             center: [15.0, 62.0], zoom: 4, doubleClickZoom: false
         });
 
+        // RÖST-FUNKTION
+        function speak(text) {
+            if (!window.speechSynthesis) return;
+            window.speechSynthesis.cancel(); // Avbryt pågående tal
+            const msg = new SpeechSynthesisUtterance(text);
+            msg.lang = 'sv-SE';
+            msg.rate = 1.0;
+            window.speechSynthesis.speak(msg);
+        }
+
+        function repeatInstruction() {
+            const text = document.getElementById('instruction-text').innerText;
+            speak(text);
+        }
+
         map.on('movestart', () => isMapMoving = true);
         map.on('moveend', () => isMapMoving = false);
 
@@ -125,35 +132,41 @@
             if (isMapMoving) return;
             const id = Date.now();
             const marker = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).addTo(map);
-            
             stops.push({ id, marker, lngLat, name: `Stopp ${stops.length + 1}` });
             updateUI();
-            marker.togglePopup();
         }
 
         window.updateRoute = async function() {
-            if (!userCoords) return alert("Väntar på din GPS-position...");
-            if (stops.length === 0) return alert("Lägg till minst ett stopp först!");
+            if (!userCoords) return alert("Hittar inte din position...");
+            if (stops.length === 0) return;
 
+            // Vi lägger till steps=true för att få sväng-för-sväng
             const points = [userCoords, ...stops.map(s => [s.lngLat.lng, s.lngLat.lat])];
-            const url = `https://router.project-osrm.org/route/v1/driving/${points.map(c => c.join(',')).join(';')}?overview=full&geometries=geojson`;
+            const url = `https://router.project-osrm.org/route/v1/driving/${points.map(c => c.join(',')).join(';')}?overview=full&geometries=geojson&steps=true&languages=sv`;
             
             try {
                 const res = await fetch(url);
                 const data = await res.json();
-                if (!data.routes || data.routes.length === 0) return;
-                
                 const route = data.routes[0];
+
                 if (map.getSource('route')) { map.getSource('route').setData(route.geometry); } 
                 else {
                     map.addSource('route', { type: 'geojson', data: route.geometry });
                     map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': 6 } });
                 }
 
-                document.getElementById('turn-dist').innerText = `Rutt: ${(route.distance/1000).toFixed(1)} km`;
+                // Hämta första instruktionen
+                const firstStep = route.legs[0].steps[0];
+                const instruction = firstStep.maneuver.instruction;
+                
+                document.getElementById('instruction-text').innerText = instruction;
+                document.getElementById('turn-dist').innerText = `Total rutt: ${(route.distance/1000).toFixed(1)} km`;
                 document.getElementById('nav-panel').style.display = 'block';
-                stops.forEach(s => { if(s.marker.getPopup().isOpen()) s.marker.togglePopup(); });
-            } catch (e) { alert("Kunde inte hämta rutt."); }
+                
+                // Läs upp instruktionen
+                speak(instruction);
+
+            } catch (e) { console.log(e); }
         }
 
         function updateUI() {
@@ -161,118 +174,27 @@
             const container = document.getElementById('stop-list-container');
             list.innerHTML = '';
             
-            if (stops.length > 0 && showList) {
+            if (stops.length > 0) {
                 container.style.display = 'block';
                 stops.forEach((s, i) => {
-                    s.marker.setPopup(new maplibregl.Popup({offset:25}).setHTML(`
-                        <div>
-                            <b style="color:var(--indigo)">${s.name}</b><br>
-                            <button class="nav-btn-main" onclick="updateRoute()">Starta rutt</button>
-                            <button class="del-btn" onclick="removeStop(${s.id})">Radera</button>
-                        </div>
-                    `));
-
                     const item = document.createElement('div');
                     item.className = 'stop-item';
-                    item.innerHTML = `
-                        <span class="stop-name">${i+1}. ${s.name}</span>
-                        <div class="stop-controls">
-                            <button class="order-btn" onclick="moveStop(${i}, -1)">▲</button>
-                            <button class="order-btn" onclick="moveStop(${i}, 1)">▼</button>
-                        </div>
-                    `;
+                    item.innerHTML = `<span class="stop-name">${i+1}. ${s.name}</span>`;
                     list.appendChild(item);
                 });
             } else { container.style.display = 'none'; }
-            renderHistoryList();
-        }
-
-        window.saveCurrentRoute = function() {
-            const routeName = prompt("Namnge denna rutt:", `Rutt ${new Date().toLocaleDateString()}`);
-            if (!routeName) return;
-            const routeData = { id: Date.now(), name: routeName, date: new Date().toLocaleString(), stops: stops.map(s => ({ lngLat: s.lngLat, name: s.name })) };
-            let saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
-            saved.unshift(routeData);
-            localStorage.setItem('catmap_routes', JSON.stringify(saved));
-            renderHistoryList();
-        }
-
-        function renderHistoryList() {
-            const list = document.getElementById('history-list');
-            const container = document.getElementById('history-container');
-            const saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
-            container.style.display = (showHistory && saved.length > 0) ? 'block' : 'none';
-            list.innerHTML = saved.map(r => `
-                <div class="history-item">
-                    <b style="color:var(--cyan)">${r.name}</b><br>
-                    <div class="hist-actions">
-                        <button class="hist-btn" style="background:var(--indigo);color:#fff" onclick="loadRoute(${r.id})">VISA</button>
-                        <button class="hist-btn" style="background:var(--yellow)" onclick="renameRoute(${r.id})">NAMN</button>
-                        <button class="hist-btn" style="background:var(--green)" onclick="exportRoute(${r.id})">UT</button>
-                        <button class="hist-btn" style="background:var(--red);color:#fff" onclick="deleteRoute(${r.id})">X</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        window.loadRoute = function(id) {
-            const saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
-            const r = saved.find(x => x.id === id);
-            if (!r) return;
-            clearAll();
-            r.stops.forEach(s => {
-                const marker = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(s.lngLat).addTo(map);
-                stops.push({ id: Date.now()+Math.random(), marker, lngLat: s.lngLat, name: s.name });
-            });
-            updateUI();
-            updateRoute();
-        }
-
-        window.renameRoute = function(id) {
-            let saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
-            const i = saved.findIndex(x => x.id === id);
-            const n = prompt("Nytt namn:", saved[i].name);
-            if (n) { saved[i].name = n; localStorage.setItem('catmap_routes', JSON.stringify(saved)); renderHistoryList(); }
-        }
-
-        window.exportRoute = function(id) {
-            const saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
-            const r = saved.find(x => x.id === id);
-            const a = document.createElement('a');
-            a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(r));
-            a.download = r.name + ".json";
-            a.click();
-        }
-
-        window.deleteRoute = function(id) {
-            if (!confirm("Radera rutt?")) return;
-            let saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
-            localStorage.setItem('catmap_routes', JSON.stringify(saved.filter(x => x.id !== id)));
-            renderHistoryList();
-        }
-
-        window.toggleHistory = function() { showHistory = !showHistory; renderHistoryList(); }
-        window.toggleList = function() { showList = !showList; document.getElementById('hideListBtn').innerText = showList ? "👁️" : "🙈"; updateUI(); }
-        window.moveStop = function(index, dir) {
-            const newIdx = index + dir;
-            if (newIdx >= 0 && newIdx < stops.length) {
-                const temp = stops[index]; stops[index] = stops[newIdx]; stops[newIdx] = temp;
-                updateUI(); if (document.getElementById('nav-panel').style.display === 'block') updateRoute();
-            }
-        }
-
-        window.removeStop = function(id) {
-            const idx = stops.findIndex(s => s.id === id);
-            if (idx !== -1) { stops[idx].marker.remove(); stops.splice(idx, 1); updateUI(); if (stops.length === 0) clearAll(); else if (document.getElementById('nav-panel').style.display === 'block') updateRoute(); }
         }
 
         window.clearAll = function() {
-            stops.forEach(s => s.marker.remove()); stops = [];
+            stops.forEach(s => s.marker.remove());
+            stops = [];
             if (map.getSource('route')) { map.removeLayer('route-line'); map.removeSource('route'); }
             document.getElementById('nav-panel').style.display = 'none';
+            window.speechSynthesis.cancel();
             updateUI();
         }
 
+        // Standard Map-logik
         map.on('mousedown', (e) => pressTimer = setTimeout(() => placePin(e.lngLat), 800));
         map.on('mouseup', () => clearTimeout(pressTimer));
         map.on('touchstart', (e) => { if(e.points.length === 1) pressTimer = setTimeout(() => placePin(e.lngLat), 800); });
@@ -293,7 +215,6 @@
 
         function toggleLock() { followUser = !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }
         map.on('dragstart', () => { if (followUser) toggleLock(); });
-        window.onload = updateUI;
     </script>
 </body>
 </html>

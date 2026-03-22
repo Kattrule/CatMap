@@ -77,4 +77,223 @@
 
     <div id="nav-panel">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div id="turn-info"><b>
+            <div id="turn-info"><b>Navigering aktiv</b><br><span id="turn-dist" style="font-size:0.8rem; color:var(--yellow);"></span></div>
+            <div style="display:flex; gap:10px;">
+                <button onclick="saveCurrentRoute()" style="background:var(--purple); border:none; color:white; padding:5px 10px; border-radius:5px; font-size:0.7rem; font-weight:bold; cursor:pointer;">SPARA</button>
+                <button onclick="clearAll()" style="background:var(--red); border:none; color:white; width:30px; height:30px; border-radius:50%; font-weight:bold; cursor:pointer;">✕</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="stop-list-container">
+        <div style="font-size:0.7rem; color:var(--cyan); margin-bottom:8px; font-weight:bold; letter-spacing:1px;">STOPP</div>
+        <div id="stop-list"></div>
+        <button class="nav-btn-main" onclick="updateRoute()">Starta rutt</button>
+    </div>
+
+    <div id="history-container">
+        <div style="font-size:0.7rem; color:var(--purple); margin-bottom:8px; font-weight:bold; letter-spacing:1px;">SPARADE TASSAVTRYCK</div>
+        <div id="history-list"></div>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="map-tools">
+        <div class="tool-btn" style="border-color:var(--purple)" onclick="toggleHistory()">📜</div>
+        <div class="tool-btn" id="hideListBtn" onclick="toggleList()">👁️</div>
+        <div class="tool-btn" id="lockBtn" onclick="toggleLock()">🔒</div>
+    </div>
+
+    <script>
+        let followUser = true, showList = true, showHistory = false, userMarker = null, userCoords = null;
+        let stops = [], pressTimer = null, isMapMoving = false;
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: { 's-tiles': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], tileSize: 256 } },
+                layers: [{ id: 's-layer', type: 'raster', source: 's-tiles' }]
+            },
+            center: [15.0, 62.0], zoom: 4, doubleClickZoom: false
+        });
+
+        map.on('movestart', () => isMapMoving = true);
+        map.on('moveend', () => isMapMoving = false);
+
+        function placePin(lngLat) {
+            if (isMapMoving) return;
+            const id = Date.now();
+            const marker = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).addTo(map);
+            
+            stops.push({ id, marker, lngLat, name: `Stopp ${stops.length + 1}` });
+            updateUI();
+            marker.togglePopup();
+        }
+
+        window.updateRoute = async function() {
+            if (!userCoords) return alert("Väntar på din GPS-position...");
+            if (stops.length === 0) return alert("Lägg till minst ett stopp först!");
+
+            const points = [userCoords, ...stops.map(s => [s.lngLat.lng, s.lngLat.lat])];
+            const url = `https://router.project-osrm.org/route/v1/driving/${points.map(c => c.join(',')).join(';')}?overview=full&geometries=geojson`;
+            
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                if (!data.routes || data.routes.length === 0) return;
+                
+                const route = data.routes[0];
+                if (map.getSource('route')) { map.getSource('route').setData(route.geometry); } 
+                else {
+                    map.addSource('route', { type: 'geojson', data: route.geometry });
+                    map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': 6 } });
+                }
+
+                document.getElementById('turn-dist').innerText = `Rutt: ${(route.distance/1000).toFixed(1)} km`;
+                document.getElementById('nav-panel').style.display = 'block';
+                stops.forEach(s => { if(s.marker.getPopup().isOpen()) s.marker.togglePopup(); });
+            } catch (e) { alert("Kunde inte hämta rutt."); }
+        }
+
+        function updateUI() {
+            const list = document.getElementById('stop-list');
+            const container = document.getElementById('stop-list-container');
+            list.innerHTML = '';
+            
+            if (stops.length > 0 && showList) {
+                container.style.display = 'block';
+                stops.forEach((s, i) => {
+                    s.marker.setPopup(new maplibregl.Popup({offset:25}).setHTML(`
+                        <div>
+                            <b style="color:var(--indigo)">${s.name}</b><br>
+                            <button class="nav-btn-main" onclick="updateRoute()">Starta rutt</button>
+                            <button class="del-btn" onclick="removeStop(${s.id})">Radera</button>
+                        </div>
+                    `));
+
+                    const item = document.createElement('div');
+                    item.className = 'stop-item';
+                    item.innerHTML = `
+                        <span class="stop-name">${i+1}. ${s.name}</span>
+                        <div class="stop-controls">
+                            <button class="order-btn" onclick="moveStop(${i}, -1)">▲</button>
+                            <button class="order-btn" onclick="moveStop(${i}, 1)">▼</button>
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
+            } else { container.style.display = 'none'; }
+            renderHistoryList();
+        }
+
+        window.saveCurrentRoute = function() {
+            const routeName = prompt("Namnge denna rutt:", `Rutt ${new Date().toLocaleDateString()}`);
+            if (!routeName) return;
+            const routeData = { id: Date.now(), name: routeName, date: new Date().toLocaleString(), stops: stops.map(s => ({ lngLat: s.lngLat, name: s.name })) };
+            let saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
+            saved.unshift(routeData);
+            localStorage.setItem('catmap_routes', JSON.stringify(saved));
+            renderHistoryList();
+        }
+
+        function renderHistoryList() {
+            const list = document.getElementById('history-list');
+            const container = document.getElementById('history-container');
+            const saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
+            container.style.display = (showHistory && saved.length > 0) ? 'block' : 'none';
+            list.innerHTML = saved.map(r => `
+                <div class="history-item">
+                    <b style="color:var(--cyan)">${r.name}</b><br>
+                    <div class="hist-actions">
+                        <button class="hist-btn" style="background:var(--indigo);color:#fff" onclick="loadRoute(${r.id})">VISA</button>
+                        <button class="hist-btn" style="background:var(--yellow)" onclick="renameRoute(${r.id})">NAMN</button>
+                        <button class="hist-btn" style="background:var(--green)" onclick="exportRoute(${r.id})">UT</button>
+                        <button class="hist-btn" style="background:var(--red);color:#fff" onclick="deleteRoute(${r.id})">X</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.loadRoute = function(id) {
+            const saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
+            const r = saved.find(x => x.id === id);
+            if (!r) return;
+            clearAll();
+            r.stops.forEach(s => {
+                const marker = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(s.lngLat).addTo(map);
+                stops.push({ id: Date.now()+Math.random(), marker, lngLat: s.lngLat, name: s.name });
+            });
+            updateUI();
+            updateRoute();
+        }
+
+        window.renameRoute = function(id) {
+            let saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
+            const i = saved.findIndex(x => x.id === id);
+            const n = prompt("Nytt namn:", saved[i].name);
+            if (n) { saved[i].name = n; localStorage.setItem('catmap_routes', JSON.stringify(saved)); renderHistoryList(); }
+        }
+
+        window.exportRoute = function(id) {
+            const saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
+            const r = saved.find(x => x.id === id);
+            const a = document.createElement('a');
+            a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(r));
+            a.download = r.name + ".json";
+            a.click();
+        }
+
+        window.deleteRoute = function(id) {
+            if (!confirm("Radera rutt?")) return;
+            let saved = JSON.parse(localStorage.getItem('catmap_routes') || '[]');
+            localStorage.setItem('catmap_routes', JSON.stringify(saved.filter(x => x.id !== id)));
+            renderHistoryList();
+        }
+
+        window.toggleHistory = function() { showHistory = !showHistory; renderHistoryList(); }
+        window.toggleList = function() { showList = !showList; document.getElementById('hideListBtn').innerText = showList ? "👁️" : "🙈"; updateUI(); }
+        window.moveStop = function(index, dir) {
+            const newIdx = index + dir;
+            if (newIdx >= 0 && newIdx < stops.length) {
+                const temp = stops[index]; stops[index] = stops[newIdx]; stops[newIdx] = temp;
+                updateUI(); if (document.getElementById('nav-panel').style.display === 'block') updateRoute();
+            }
+        }
+
+        window.removeStop = function(id) {
+            const idx = stops.findIndex(s => s.id === id);
+            if (idx !== -1) { stops[idx].marker.remove(); stops.splice(idx, 1); updateUI(); if (stops.length === 0) clearAll(); else if (document.getElementById('nav-panel').style.display === 'block') updateRoute(); }
+        }
+
+        window.clearAll = function() {
+            stops.forEach(s => s.marker.remove()); stops = [];
+            if (map.getSource('route')) { map.removeLayer('route-line'); map.removeSource('route'); }
+            document.getElementById('nav-panel').style.display = 'none';
+            updateUI();
+        }
+
+        map.on('mousedown', (e) => pressTimer = setTimeout(() => placePin(e.lngLat), 800));
+        map.on('mouseup', () => clearTimeout(pressTimer));
+        map.on('touchstart', (e) => { if(e.points.length === 1) pressTimer = setTimeout(() => placePin(e.lngLat), 800); });
+        map.on('touchend', () => clearTimeout(pressTimer));
+
+        const myEl = document.createElement('div');
+        myEl.innerHTML = `<svg width="30" height="30" viewBox="0 0 100 100" id="me"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="black" stroke-width="5"/></svg>`;
+        
+        navigator.geolocation.watchPosition(pos => {
+            userCoords = [pos.coords.longitude, pos.coords.latitude];
+            if (!userMarker) {
+                userMarker = new maplibregl.Marker({ element: myEl }).setLngLat(userCoords).addTo(map);
+                map.setCenter(userCoords); map.setZoom(15);
+            } else { userMarker.setLngLat(userCoords); }
+            document.getElementById('me').style.transform = `rotate(${pos.coords.heading || 0}deg)`;
+            if (followUser) map.easeTo({ center: userCoords });
+        }, null, { enableHighAccuracy: true });
+
+        function toggleLock() { followUser = !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }
+        map.on('dragstart', () => { if (followUser) toggleLock(); });
+        window.onload = updateUI;
+    </script>
+</body>
+</html>

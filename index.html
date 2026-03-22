@@ -3,369 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cat-Map</title>
+    <title>CatMap Pro</title>
     
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#05050f">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
 
     <style>
         :root {
-            --bg: #05050f;
-            --panel: rgba(189, 147, 249, 0.15); /* Lite mer lila för Cat-Map */
             --indigo: #7582ff;
+            --bg-glass: rgba(15, 15, 30, 0.9);
             --cyan: #8be9fd;
-            --green: #50fa7b;
-            --red: #f93111;
-            --purple: #bd93f9;
-            --dark-purple: #44475a;
             --yellow: #f1fa8c;
+            --red: #ff5555;
+            --green: #50fa7b;
+            --purple: #bd93f9;
         }
-        
-        body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--cyan); font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; overflow: hidden; }
-        
-        .header { padding: 10px; text-align: center; background: var(--bg); border-bottom: 2px solid var(--purple); z-index: 1000; flex-shrink: 0; }
-        .speed-val { font-size: 3rem; font-weight: bold; color: var(--green); line-height: 1; }
-        .unit-label { font-size: 0.9rem; color: #6272a4; font-weight: bold; margin-bottom: 5px; }
 
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 5px 0; }
-        .stat-card { background: var(--panel); padding: 6px; border-radius: 8px; border: 1px solid rgba(189, 147, 249, 0.2); text-align: center; }
-        .stat-label { font-size: 0.55rem; color: var(--purple); text-transform: uppercase; display: block; }
-        .stat-num { font-size: 1rem; color: #fff; font-weight: bold; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: sans-serif; color: white; }
+        #map { height: 100%; width: 100%; position: absolute; }
 
-        .controls { display: flex; justify-content: center; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
-        button { padding: 12px; font-size: 0.8rem; font-weight: bold; border: none; border-radius: 8px; text-transform: uppercase; cursor: pointer; flex: 1; min-width: 80px; transition: opacity 0.2s; }
-        button:active { opacity: 0.7; }
-        
-        #startBtn { background: var(--green); color: #000; }
-        #pauseBtn { background: var(--yellow); color: #000; display: none; }
-        #saveBtn { background: var(--cyan); color: #000; display: none; }
-        #stopBtn { background: var(--red); color: #fff; display: none; }
-        
-        #map-container { position: relative; width: 100%; flex-shrink: 0; overflow: hidden; border-bottom: 1px solid var(--purple); }
-        #map { height: 250px; width: 100%; background: #000; }
-        
-        #resizer { height: 26px; background: var(--dark-purple); cursor: ns-resize; display: flex; justify-content: center; align-items: center; touch-action: none; z-index: 1002; }
-        #resizer::after { content: ""; width: 50px; height: 4px; background: var(--purple); border-radius: 2px; }
+        #search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 3000; }
+        #search-input {
+            width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--indigo);
+            background: var(--bg-glass); color: white; backdrop-filter: blur(10px); box-sizing: border-box; outline: none;
+        }
 
-        #mapClock { position: absolute; top: 10px; right: 10px; z-index: 1001; background: rgba(5,5,15,0.85); padding: 5px 12px; border: 1px solid var(--purple); border-radius: 6px; color: var(--yellow); font-family: monospace; }
+        /* STOPP-LISTA */
+        #stop-list-container {
+            position: absolute; bottom: 100px; left: 10px; width: 220px;
+            max-height: 35vh; overflow-y: auto; z-index: 2000;
+            background: var(--bg-glass); border: 1px solid var(--indigo);
+            border-radius: 10px; padding: 10px; display: none; backdrop-filter: blur(10px);
+        }
+        .stop-item {
+            display: flex; align-items: center; background: rgba(255,255,255,0.1);
+            margin-bottom: 5px; padding: 5px 8px; border-radius: 5px; font-size: 0.8rem;
+        }
+        .stop-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .order-btn { background: none; border: 1px solid #555; color: white; padding: 2px 5px; border-radius: 3px; cursor: pointer; margin-left: 2px; }
 
-        .div-arrow { background: transparent !important; border: none !important; }
+        /* HISTORIK-PANEL */
+        #history-container {
+            position: absolute; top: 130px; right: 10px; width: 200px;
+            max-height: 40vh; overflow-y: auto; z-index: 2000;
+            background: var(--bg-glass); border: 1px solid var(--purple);
+            border-radius: 10px; padding: 10px; display: none; backdrop-filter: blur(10px);
+        }
+        .history-item { background: rgba(189,147,249,0.1); border: 1px solid rgba(189,147,249,0.3); margin-bottom: 8px; padding: 8px; border-radius: 6px; font-size: 0.75rem; }
+        .hist-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 5px; }
+        .hist-btn { padding: 4px; font-size: 0.6rem; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; }
 
-        .history { padding: 15px; overflow-y: auto; flex-grow: 1; background: #080812; }
-        .history-item { background: var(--panel); padding: 12px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid var(--purple); }
-        
-        .action-row { display: flex; gap: 4px; margin-top: 10px; }
-        .action-btn { flex: 1; padding: 8px 2px; font-size: 0.6rem; border-radius: 4px; border: none; font-weight: bold; color: #000; }
-        
-        .view-btn { background: var(--purple); color: #fff; }
-        .edit-btn { background: var(--cyan); }
-        .exp-single-btn { background: var(--green); }
-        .delete-btn { background: #444; color: var(--red); }
-        
-        .io-header-btns { display: flex; gap: 5px; }
-        .io-btn { background: var(--dark-purple); color: #fff; padding: 6px 10px; font-size: 0.65rem; border: none; border-radius: 4px; cursor: pointer; }
+        /* NAV-PANEL */
+        #nav-panel {
+            position: absolute; top: 65px; left: 10px; right: 10px; z-index: 2500;
+            background: var(--bg-glass); border: 1px solid var(--cyan);
+            border-radius: 10px; padding: 12px; display: none; backdrop-filter: blur(5px);
+        }
 
-        .km-marker { background: var(--purple); border: 2px solid white; border-radius: 50%; color: black; font-weight: bold; text-align: center; font-size: 11px; line-height: 20px; }
+        /* POPUP & KNAPPAR */
+        .maplibregl-popup-content { background: var(--bg-glass) !important; color: white; border: 1px solid var(--indigo); border-radius: 8px !important; text-align: center; padding: 15px !important; }
+        .nav-btn-main { width: 100%; background: var(--green); color: #000; border: none; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; cursor: pointer; text-transform: uppercase; font-size: 0.7rem; }
+        .del-btn { width: 100%; background: transparent; color: var(--red); border: 1px solid var(--red); padding: 5px; border-radius: 5px; margin-top: 8px; cursor: pointer; font-size: 0.7rem; }
+
+        .map-tools { position: absolute; bottom: 25px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .tool-btn { width: 55px; height: 55px; background: var(--bg-glass); border: 2px solid var(--indigo); border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.3rem; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <div class="header" id="ui-header">
-        <div style="margin-bottom: 8px; font-weight: bold; letter-spacing: 2px; color: var(--purple)">CAT-MAP</div>
-        
-        <select id="timeMode" onchange="updateUI()" style="background:#101020; color:var(--cyan); border:1px solid var(--purple); margin-bottom:8px; width: 95%; padding: 5px; border-radius: 5px;">
-            <option value="normal">VANLIG TID (km/h)</option>
-            <option value="chms">CHMS TID (km/ch)</option>
-        </select>
-
-        <div class="main-display">
-            <div class="speed-val" id="curSpeed">0</div>
-            <div id="speedUnit" class="unit-label">km/h</div>
-        </div>
-
-        <div class="stats-grid">
-            <div class="stat-card"><span class="stat-label">Restid</span><span class="stat-num" id="timer">00:00:00</span></div>
-            <div class="stat-card"><span class="stat-label">Sträcka</span><span class="stat-num" id="dist">0.00 km</span></div>
-            <div class="stat-card"><span class="stat-label">Maxfart</span><span class="stat-num" id="maxSpeed">0</span></div>
-            <div class="stat-card"><span class="stat-label">Snittfart</span><span class="stat-num" id="avgSpeed">0</span></div>
-        </div>
-        
-        <div class="controls">
-            <button id="startBtn" onclick="startTracking()">Starta rutt</button>
-            <button id="pauseBtn" onclick="togglePause()">Paus</button>
-            <button id="saveBtn" onclick="saveTrip()">Spara</button>
-            <button id="stopBtn" onclick="stopTracking()">Nollställ</button>
-        </div>
+    <div id="search-container">
+        <input type="text" id="search-input" placeholder="Håll inne på kartan för att lägga till..." autocomplete="off">
     </div>
 
-    <div id="map-container">
-        <div id="map"></div>
-        <div id="mapClock">00:00:00</div>
-    </div>
-    
-    <div id="resizer"></div>
-
-    <div class="history">
-        <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importTrips(event)">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h3 style="color: var(--purple); font-size: 0.9rem; margin: 0;">SPARADE TASSAVTRYCK</h3>
-            <div class="io-header-btns">
-                <button class="io-btn" onclick="document.getElementById('importFile').click()">Hämta</button>
-                <button class="io-btn" onclick="exportTrips()">Spara alla</button>
-            </div>
-        </div>
-        <div id="historyList"></div>
-    </div>
-
-    <script>
-        let map, polyline, marker, historyLayer;
-        let watchId = null, timerInterval = null, isPaused = false;
-        let startTime = null, pausedTimeTotal = 0, pauseStartedAt = null;
-        let pathCoords = [], totalDistance = 0, currentSpeedMs = 0, maxSpeedMs = 0, lastKmMark = 0;
-
-        function initMap() {
-            // Skapa kartan utan klick-hantering för nålar
-            map = L.map('map', { 
-                maxZoom: 20,
-                tap: false,
-                zoomControl: false // Vi kan lägga till den om du vill, men renare utan
-            }).setView([62.0, 15.0], 5);
-            
-            L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-                maxZoom: 20, subdomains: ['mt0','mt1','mt2','mt3'], attribution: '© Google'
-            }).addTo(map);
-
-            polyline = L.polyline([], { color: '#bd93f9', weight: 6, opacity: 0.9 }).addTo(map);
-            historyLayer = L.layerGroup().addTo(map);
-            
-            loadHistory();
-        }
-
-        function startTracking() {
-            if (!navigator.geolocation) return alert("Katten hittar inte GPS:en!");
-            
-            // Rensa gammal data
-            historyLayer.clearLayers();
-            pathCoords = [];
-            totalDistance = 0;
-            maxSpeedMs = 0;
-            lastKmMark = 0;
-            isPaused = false;
-            startTime = new Date();
-            pausedTimeTotal = 0;
-
-            // UI-växling
-            document.getElementById('startBtn').style.display = 'none';
-            document.getElementById('pauseBtn').style.display = 'inline-block';
-            document.getElementById('saveBtn').style.display = 'inline-block';
-            document.getElementById('stopBtn').style.display = 'inline-block';
-
-            if (timerInterval) clearInterval(timerInterval);
-            timerInterval = setInterval(updateUI, 100);
-
-            // Starta GPS-bevakning
-            watchId = navigator.geolocation.watchPosition(pos => {
-                if (isPaused) return;
-
-                const newPos = [pos.coords.latitude, pos.coords.longitude];
-                currentSpeedMs = pos.coords.speed || 0;
-                if (currentSpeedMs > maxSpeedMs) maxSpeedMs = currentSpeedMs;
-
-                if (pathCoords.length > 0) {
-                    const lastPos = pathCoords[pathCoords.length - 1];
-                    const gap = L.latLng(lastPos).distanceTo(L.latLng(newPos));
-                    if (gap > 1.5) { 
-                        totalDistance += gap;
-                        pathCoords.push(newPos);
-                    }
-                } else {
-                    pathCoords.push(newPos);
-                }
-
-                polyline.setLatLngs(pathCoords);
-                map.setView(newPos, map.getZoom() < 17 ? 17 : map.getZoom());
-
-                // Cat-Marker (pilen)
-                const arrowHtml = `<div style="transform: rotate(${pos.coords.heading || 0}deg);"><svg width="30" height="30" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#50fa7b" stroke="#000" stroke-width="5"/></svg></div>`;
-                if (!marker) {
-                    marker = L.marker(newPos, {icon: L.divIcon({html: arrowHtml, className:'div-arrow', iconSize:[30,30], iconAnchor:[15,15]})}).addTo(map);
-                } else { 
-                    marker.setLatLng(newPos); 
-                    marker.setIcon(L.divIcon({html: arrowHtml, className:'div-arrow', iconSize:[30,30], iconAnchor:[15,15]})); 
-                }
-
-                // Milstolpar
-                let currentKm = Math.floor(totalDistance / 1000);
-                if (currentKm > lastKmMark) {
-                    lastKmMark = currentKm;
-                    L.marker(newPos, { icon: L.divIcon({ className: 'km-marker', html: lastKmMark, iconSize: [22, 22] }) }).addTo(map);
-                }
-            }, null, { enableHighAccuracy: true });
-        }
-
-        function renameTrip(id) {
-            let trips = JSON.parse(localStorage.getItem('catmap_trips') || '[]');
-            const index = trips.findIndex(t => t.id === id);
-            if (index !== -1) {
-                const n = prompt("Vad ska rutten heta?", trips[index].name);
-                if (n) {
-                    trips[index].name = n;
-                    localStorage.setItem('catmap_trips', JSON.stringify(trips));
-                    loadHistory();
-                }
-            }
-        }
-
-        function exportSingleTrip(id) {
-            let trips = JSON.parse(localStorage.getItem('catmap_trips') || '[]');
-            const trip = trips.find(t => t.id === id);
-            if (trip) {
-                const blob = new Blob([JSON.stringify([trip])], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.download = `cat_${(trip.name || 'rutt').replace(/\s/g, '_')}.json`;
-                a.href = url;
-                a.click();
-            }
-        }
-
-        function saveTrip() {
-            if (pathCoords.length < 2) return alert("För lite data!");
-            const mode = document.getElementById('timeMode').value;
-            const factor = (mode === 'chms') ? 4.32 : 3.6;
-            
-            const trip = { 
-                id: Date.now(), 
-                name: "Ny rutt " + new Date().toLocaleDateString(),
-                date: new Date().toLocaleString(), 
-                dist: (totalDistance / 1000).toFixed(2), 
-                max: Math.round(maxSpeedMs * factor), 
-                time: document.getElementById('timer').innerText, 
-                unit: (mode === 'chms') ? "km/ch" : "km/h", 
-                route: pathCoords 
-            };
-            
-            let trips = JSON.parse(localStorage.getItem('catmap_trips') || '[]');
-            trips.unshift(trip);
-            localStorage.setItem('catmap_trips', JSON.stringify(trips));
-            loadHistory();
-            alert("Rutt sparad!");
-        }
-
-        function loadHistory() {
-            const list = document.getElementById('historyList');
-            let trips = JSON.parse(localStorage.getItem('catmap_trips') || '[]');
-            list.innerHTML = trips.map(t => `
-                <div class="history-item">
-                    <strong style="color:var(--purple)">${t.name}</strong><br>
-                    <small style="color:#6272a4">${t.date}</small><br>
-                    <div style="margin-top:5px;">${t.dist} km | Max: ${t.max} ${t.unit}</div>
-                    <div class="action-row">
-                        <button class="action-btn view-btn" onclick="viewRoute(${t.id})">VISA</button>
-                        <button class="action-btn edit-btn" onclick="renameTrip(${t.id})">NAMN</button>
-                        <button class="action-btn exp-single-btn" onclick="exportSingleTrip(${t.id})">UT</button>
-                        <button class="action-btn delete-btn" onclick="deleteTrip(${t.id})">X</button>
-                    </div>
-                </div>`).join('');
-        }
-
-        function viewRoute(id) {
-            let trips = JSON.parse(localStorage.getItem('catmap_trips') || '[]');
-            const trip = trips.find(t => t.id === id);
-            if (trip) {
-                historyLayer.clearLayers();
-                const line = L.polyline(trip.route, {color: '#50fa7b', weight: 4, dashArray: '5, 10'}).addTo(historyLayer);
-                map.fitBounds(line.getBounds(), {padding: [20,20]});
-            }
-        }
-
-        function deleteTrip(id) {
-            if(confirm("Radera?")) {
-                let trips = JSON.parse(localStorage.getItem('catmap_trips') || '[]');
-                localStorage.setItem('catmap_trips', JSON.stringify(trips.filter(t => t.id !== id)));
-                loadHistory();
-            }
-        }
-
-        function exportTrips() {
-            const data = localStorage.getItem('catmap_trips') || '[]';
-            const blob = new Blob([data], { type: "application/json" });
-            const a = document.createElement('a');
-            a.download = `catmap_backup.json`;
-            a.href = URL.createObjectURL(blob);
-            a.click();
-        }
-
-        function importTrips(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const imported = JSON.parse(e.target.result);
-                    let current = JSON.parse(localStorage.getItem('catmap_trips') || '[]');
-                    const combined = [...imported, ...current];
-                    const unique = Array.from(new Map(combined.map(t => [t.id, t])).values());
-                    unique.sort((a,b) => b.id - a.id);
-                    localStorage.setItem('catmap_trips', JSON.stringify(unique));
-                    loadHistory();
-                } catch(err) { alert("Kunde inte läsa filen."); }
-            };
-            reader.readAsText(file);
-        }
-
-        function togglePause() {
-            isPaused = !isPaused;
-            document.getElementById('pauseBtn').innerText = isPaused ? "Kör" : "Paus";
-            if (isPaused) pauseStartedAt = new Date();
-            else pausedTimeTotal += (new Date() - pauseStartedAt);
-        }
-
-        function stopTracking() { if(confirm("Nollställa?")) location.reload(); }
-
-        function updateUI() {
-            const mode = document.getElementById('timeMode').value;
-            const now = new Date();
-            document.getElementById('mapClock').innerText = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-            if (startTime) {
-                let diffMs = (isPaused ? pauseStartedAt : now) - startTime - pausedTimeTotal;
-                let s = Math.max(0, diffMs / 1000);
-                document.getElementById('timer').innerText = new Date(s * 1000).toISOString().substr(11, 8);
-                
-                let f = (mode === 'chms') ? 4.32 : 3.6;
-                document.getElementById('curSpeed').innerText = Math.round((isPaused ? 0 : currentSpeedMs) * f);
-                document.getElementById('maxSpeed').innerText = Math.round(maxSpeedMs * f);
-                document.getElementById('avgSpeed').innerText = s > 0 ? Math.round((totalDistance / s) * f) : 0;
-                document.getElementById('speedUnit').innerText = (mode === 'chms') ? "km/ch" : "km/h";
-                document.getElementById('dist').innerText = (totalDistance / 1000).toFixed(2) + " km";
-            }
-        }
-
-        // Resizer
-        const resizer = document.getElementById('resizer');
-        resizer.addEventListener('touchstart', (e) => {
-            const move = (me) => {
-                let h = me.touches[0].clientY - document.getElementById('ui-header').offsetHeight;
-                if (h > 60 && h < window.innerHeight - 150) {
-                    document.getElementById('map').style.height = h + 'px';
-                    map.invalidateSize();
-                }
-            };
-            const end = () => {
-                window.removeEventListener('touchmove', move);
-                window.removeEventListener('touchend', end);
-            };
-            window.addEventListener('touchmove', move);
-            window.addEventListener('touchend', end);
-        });
-
-        window.onload = initMap;
-    </script>
-</body>
-</html>
+    <div id="nav-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div id="turn-info"><b>

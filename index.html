@@ -3,335 +3,392 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CatMap</title>
+    <title>Cat-Map</title>
     
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    <meta name="theme-color" content="#000000">
+    <meta name="theme-color" content="#05050f">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-    <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
-    <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
         :root {
+            --bg: #05050f;
+            --panel: rgba(117, 130, 255, 0.15);
             --indigo: #7582ff;
-            --bg-glass: rgba(15, 15, 30, 0.9);
             --cyan: #8be9fd;
-            --yellow: #f1fa8c;
-            --red: #ff5555;
             --green: #50fa7b;
-            --orange: #ffb86c;
+            --red: #f93111;
+            --purple: #bd93f9;
+            --dark-purple: #44475a;
+            --yellow: #f1fa8c;
+        }
+        
+        body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--cyan); font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; overflow: hidden; }
+        
+        .header { padding: 10px; text-align: center; background: var(--bg); border-bottom: 2px solid var(--indigo); z-index: 1000; flex-shrink: 0; }
+        .speed-val { font-size: 3rem; font-weight: bold; color: var(--green); line-height: 1; }
+        .unit-label { font-size: 0.9rem; color: #6272a4; font-weight: bold; margin-bottom: 5px; }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 5px 0; }
+        .stat-card { background: var(--panel); padding: 6px; border-radius: 8px; border: 1px solid rgba(139, 233, 253, 0.1); text-align: center; }
+        .stat-label { font-size: 0.55rem; color: var(--purple); text-transform: uppercase; display: block; }
+        .stat-num { font-size: 1rem; color: #fff; font-weight: bold; }
+
+        .controls { display: flex; justify-content: center; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
+        button { padding: 10px; font-size: 0.75rem; font-weight: bold; border: none; border-radius: 6px; text-transform: uppercase; cursor: pointer; flex: 1; min-width: 70px; }
+        
+        #startBtn { background: var(--green); color: #000; }
+        #pauseBtn { background: var(--yellow); color: #000; display: none; }
+        #saveBtn { background: var(--cyan); color: #000; display: none; }
+        #stopBtn { background: var(--red); color: #fff; display: none; }
+        
+        #map-container { position: relative; width: 100%; flex-shrink: 0; overflow: hidden; }
+        #map { height: 250px; width: 100%; background: #000; }
+        
+        #resizer {
+            height: 24px;
+            background: var(--dark-purple);
+            cursor: ns-resize;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-top: 1px solid var(--indigo);
+            border-bottom: 1px solid var(--indigo);
+            touch-action: none;
+            z-index: 1002;
+        }
+        #resizer::after {
+            content: "";
+            width: 60px;
+            height: 6px;
+            background: var(--indigo);
+            border-radius: 3px;
+            box-shadow: 0 0 10px rgba(117, 130, 255, 0.5);
         }
 
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: sans-serif; color: white; }
-        #map { height: 100%; width: 100%; position: absolute; }
+        #mapClock { position: absolute; top: 10px; right: 10px; z-index: 1001; background: rgba(5,5,15,0.85); padding: 5px 12px; border: 1px solid var(--indigo); border-radius: 6px; color: var(--yellow); font-family: monospace; }
 
-        /* SÖKRUTA */
-        #search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 3000; }
-        #search-input {
-            width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--indigo);
-            background: var(--bg-glass); color: white; backdrop-filter: blur(10px); box-sizing: border-box; outline: none; font-size: 1rem;
-        }
-        #search-results {
-            background: var(--bg-glass); border: 1px solid var(--indigo); border-radius: 0 0 10px 10px;
-            max-height: 200px; overflow-y: auto; display: none; margin-top: 5px;
-        }
-        .search-item { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); cursor: pointer; font-size: 0.9rem; }
+        .div-arrow { background: transparent !important; border: none !important; }
 
-        /* NAVIGERINGSPANEL */
-        #nav-instruction-panel {
-            position: absolute; top: 70px; left: 10px; right: 10px; z-index: 2500;
-            background: var(--bg-glass); border: 2px solid var(--green);
-            border-radius: 10px; padding: 15px; display: none; backdrop-filter: blur(10px);
-        }
-        #instruction-text { font-size: 1.1rem; font-weight: bold; color: var(--green); display: block; margin-bottom: 5px; }
-        #distance-remaining { font-size: 0.9rem; color: var(--yellow); }
+        .history { padding: 15px; overflow-y: auto; flex-grow: 1; background: #0a0a1a; min-height: 50px; }
+        .history-item { background: var(--panel); padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid var(--indigo); }
+        
+        .action-row { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
+        .action-btn { flex: 1; padding: 6px 2px; font-size: 0.65rem; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; }
+        
+        .view-btn { background: var(--indigo); color: white; }
+        .edit-btn { background: var(--cyan); color: black; }
+        .exp-single-btn { background: var(--green); color: black; }
+        .delete-btn { background: #333; color: #f93111; }
+        
+        .io-btn { background: var(--dark-purple); color: white; padding: 6px 10px; font-size: 0.65rem; border: none; border-radius: 4px; margin-left: 5px; cursor: pointer; }
 
-        /* STOPP-LISTA */
-        #stop-list-container {
-            position: absolute; bottom: 100px; left: 10px; width: 240px;
-            max-height: 35vh; overflow-y: auto; z-index: 2000;
-            background: var(--bg-glass); border: 1px solid var(--indigo);
-            border-radius: 10px; padding: 10px; display: none; backdrop-filter: blur(10px);
-        }
-        .stop-item {
-            display: flex; align-items: center; background: rgba(255,255,255,0.1);
-            margin-bottom: 5px; padding: 8px; border-radius: 5px; font-size: 0.8rem; gap: 5px;
-        }
-        .stop-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-        .order-btn { background: none; border: 1px solid #555; color: white; padding: 2px 5px; border-radius: 3px; cursor: pointer; }
-        .edit-btn-small { background: none; border: none; color: var(--cyan); cursor: pointer; font-size: 1rem; }
-        .clear-all-btn { width: 100%; background: var(--red); color: white; border: none; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; cursor: pointer; font-size: 0.8rem; }
-
-        /* POPUP STYLES */
-        .maplibregl-popup-content { background: var(--bg-glass) !important; color: white; border: 1px solid var(--indigo); border-radius: 8px !important; text-align: center; padding: 15px !important; min-width: 150px; }
-        .popup-title { display: block; font-weight: bold; margin-bottom: 10px; color: var(--indigo); font-size: 1.1rem; }
-        .nav-btn { width: 100%; background: var(--green); color: #000; border: none; padding: 10px; border-radius: 5px; font-weight: bold; margin-top: 8px; cursor: pointer; }
-        .edit-btn { width: 100%; background: var(--cyan); color: #000; border: none; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 5px; cursor: pointer; font-size: 0.8rem; }
-        .del-btn { width: 100%; background: transparent; color: var(--red); border: 1px solid var(--red); padding: 5px; border-radius: 5px; margin-top: 8px; cursor: pointer; font-size: 0.7rem; }
-
-        .map-tools { position: absolute; bottom: 25px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
-        .tool-btn { width: 55px; height: 55px; background: var(--bg-glass); border: 2px solid var(--indigo); border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.3rem; cursor: pointer; }
+        .km-marker { background: var(--purple); border: 2px solid white; border-radius: 50%; color: black; font-weight: bold; text-align: center; font-size: 11px; line-height: 20px; }
     </style>
 </head>
 <body>
 
-    <div id="search-container">
-        <input type="text" id="search-input" placeholder="Sök eller klistra in koordinater..." autocomplete="off">
-        <div id="search-results"></div>
-    </div>
+    <div class="header" id="ui-header">
+        <select id="timeMode" onchange="updateUI()" style="background:#101020; color:var(--cyan); border:1px solid var(--indigo); margin-bottom:8px; width: 90%;">
+            <option value="normal">VANLIG TID (km/h)</option>
+            <option value="chms">CHMS TID (km/ch)</option>
+        </select>
 
-    <div id="nav-instruction-panel">
-        <div style="display:flex; justify-content:space-between; align-items:start;">
-            <div>
-                <span id="instruction-text">Kör rakt fram</span>
-                <span id="distance-remaining">Beräknar...</span>
-            </div>
-            <button onclick="stopNavigation()" style="background:var(--red); border:none; color:white; width:35px; height:35px; border-radius:50%; font-weight:bold; cursor:pointer;">✕</button>
+        <div class="main-display">
+            <div class="speed-val" id="curSpeed">0</div>
+            <div id="speedUnit" class="unit-label">km/h</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><span class="stat-label">Restid</span><span class="stat-num" id="timer">00:00:00</span></div>
+            <div class="stat-card"><span class="stat-label">Sträcka</span><span class="stat-num" id="dist">0.00 km</span></div>
+            <div class="stat-card"><span class="stat-label">Maxfart</span><span class="stat-num" id="maxSpeed">0</span></div>
+            <div class="stat-card"><span class="stat-label">Snittfart</span><span class="stat-num" id="avgSpeed">0</span></div>
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn" onclick="startTracking()">Starta rutt</button>
+            <button id="pauseBtn" onclick="togglePause()">Paus</button>
+            <button id="saveBtn" onclick="saveTrip()">Spara</button>
+            <button id="stopBtn" onclick="stopTracking()">Nollställ</button>
         </div>
     </div>
 
-    <div id="stop-list-container">
-        <div style="font-size:0.7rem; color:var(--cyan); margin-bottom:8px; font-weight:bold; letter-spacing:1px;">RUTT-ORDNING</div>
-        <div id="stop-list"></div>
-        <button class="clear-all-btn" onclick="clearAll()">🗑️ TA BORT ALLA</button>
+    <div id="map-container">
+        <div id="map"></div>
+        <div id="mapClock">00:00:00</div>
     </div>
+    
+    <div id="resizer"></div>
 
-    <div id="map"></div>
-
-    <div class="map-tools">
-        <div class="tool-btn" id="hideListBtn" onclick="toggleList()">👁️</div>
-        <div class="tool-btn" id="lockBtn" onclick="toggleLock()">🔒</div>
-        <div class="tool-btn" onclick="speak('Redo')">🔊</div>
+    <div class="history">
+        <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importTrips(event)">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="color: var(--indigo); font-size: 0.9rem; margin: 0;">HISTORIK (Cat-Map)</h3>
+            <div style="display: flex;">
+                <button class="io-btn" onclick="document.getElementById('importFile').click()">Importera</button>
+                <button class="io-btn" onclick="exportTrips()">Exportera Alla</button>
+            </div>
+        </div>
+        <div id="historyList"></div>
     </div>
 
     <script>
-        let followUser = true, showList = true, userMarker = null, userCoords = null, stops = [];
-        let currentRouteSteps = [], lastInstruction = "", pressTimer = null;
+        let map, polyline, marker, historyLayer;
+        let watchId = null, timerInterval = null, isPaused = false;
+        let startTime = null, pausedTimeTotal = 0, pauseStartedAt = null;
+        let pathCoords = [], totalDistance = 0, currentSpeedMs = 0, maxSpeedMs = 0, lastKmMark = 0;
 
-        const map = new maplibregl.Map({
-            container: 'map',
-            style: {
-                version: 8,
-                sources: { 's-tiles': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], tileSize: 256 } },
-                layers: [{ id: 's-layer', type: 'raster', source: 's-tiles' }]
-            },
-            center: [15.0, 62.0], zoom: 4, doubleClickZoom: false
-        });
-
-        function speak(text) {
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-                const msg = new SpeechSynthesisUtterance(text);
-                msg.lang = 'sv-SE';
-                window.speechSynthesis.speak(msg);
-            }
-        }
-
-        // SÖK & KOORDINATER
-        const searchInput = document.getElementById('search-input');
-        const searchResults = document.getElementById('search-results');
-
-        function parseCoords(input) {
-            const parts = input.replace(/[^\d.,\-+\s]/g, '').trim().split(/[\s,]+/);
-            if (parts.length === 2) {
-                const lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
-                if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
-            }
-            return null;
-        }
-
-        searchInput.addEventListener('input', async (e) => {
-            const query = e.target.value.trim();
-            if (query.length < 3) { searchResults.style.display = 'none'; return; }
-            searchResults.innerHTML = '';
-            const isCoord = parseCoords(query);
-
-            if (isCoord) {
-                const div = document.createElement('div');
-                div.className = 'search-item';
-                div.innerHTML = `📍 Placera nål: ${isCoord.lat}, ${isCoord.lng}`;
-                div.onclick = () => {
-                    map.flyTo({ center: [isCoord.lng, isCoord.lat], zoom: 15 });
-                    addStop(isCoord.lat, isCoord.lng, `Koordinat`);
-                    closeSearch();
-                };
-                searchResults.appendChild(div);
-            } else {
-                try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
-                    const data = await res.json();
-                    data.forEach(item => {
-                        const div = document.createElement('div');
-                        div.className = 'search-item';
-                        div.innerText = item.display_name;
-                        div.onclick = () => {
-                            const lat = parseFloat(item.lat), lon = parseFloat(item.lon);
-                            map.flyTo({ center: [lon, lat], zoom: 15 });
-                            addStop(lat, lon, item.name || "Sökresultat");
-                            closeSearch();
-                        };
-                        searchResults.appendChild(div);
-                    });
-                } catch (e) {}
-            }
-            searchResults.style.display = 'block';
-        });
-
-        function closeSearch() { searchResults.style.display = 'none'; searchInput.value = ''; searchInput.blur(); followUser = false; toggleLock(false); }
-
-        // STOPP-HANTERING
-        function addStop(lat, lng, name) {
-            const id = Date.now();
-            const marker = new maplibregl.Marker({ color: "#ff5555" }).setLngLat([lng, lat]).addTo(map);
-            stops.push({ id, lat, lng, name, marker });
-            updateUI();
+        // Initiera kartan
+        function initMap() {
+            map = L.map('map', { 
+                maxZoom: 20,
+                tap: false // Inaktiverar Leaflets egna tap-hantering som kan spöka på mobiler
+            }).setView([62.0, 15.0], 5);
             
-            // Öppna popup direkt så man kan starta rutt eller ändra namn
-            setTimeout(() => {
-                marker.getElement().click();
-            }, 200);
+            L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                maxZoom: 20, subdomains: ['mt0','mt1','mt2','mt3'], attribution: '© Google'
+            }).addTo(map);
+
+            polyline = L.polyline([], { color: '#7582ff', weight: 6, opacity: 1.0 }).addTo(map);
+            historyLayer = L.layerGroup().addTo(map);
+            
+            loadHistory();
         }
 
-        // NAMNÄNDRING
-        window.renameStop = function(id) {
-            const stop = stops.find(s => s.id === id);
-            if (stop) {
-                const newName = prompt("Ange nytt namn för stoppet:", stop.name);
-                if (newName !== null && newName.trim() !== "") {
-                    stop.name = newName.trim();
-                    updateUI();
+        // GPS START-FUNKTION
+        function startTracking() {
+            if (!navigator.geolocation) return alert("Din enhet saknar GPS-stöd.");
+            
+            // Återställ allt inför ny rutt
+            historyLayer.clearLayers();
+            pathCoords = [];
+            totalDistance = 0;
+            maxSpeedMs = 0;
+            lastKmMark = 0;
+            isPaused = false;
+            startTime = new Date();
+            pausedTimeTotal = 0;
+
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            document.getElementById('saveBtn').style.display = 'inline-block';
+            document.getElementById('stopBtn').style.display = 'inline-block';
+
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(updateUI, 100);
+
+            watchId = navigator.geolocation.watchPosition(pos => {
+                if (isPaused) return;
+
+                const newPos = [pos.coords.latitude, pos.coords.longitude];
+                currentSpeedMs = pos.coords.speed || 0;
+                if (currentSpeedMs > maxSpeedMs) maxSpeedMs = currentSpeedMs;
+
+                if (pathCoords.length > 0) {
+                    const lastPos = pathCoords[pathCoords.length - 1];
+                    const dist = L.latLng(lastPos).distanceTo(L.latLng(newPos));
+                    // Filtrera bort "GPS-hopp" om vi står still men GPS:en darrar
+                    if (dist > 2) { 
+                        totalDistance += dist;
+                        pathCoords.push(newPos);
+                    }
+                } else {
+                    pathCoords.push(newPos);
+                }
+
+                // Rita rutt
+                polyline.setLatLngs(pathCoords);
+                map.setView(newPos, map.getZoom() < 16 ? 16 : map.getZoom());
+
+                // Uppdatera pilen (Cat-Marker)
+                const arrowHtml = `<div style="transform: rotate(${pos.coords.heading || 0}deg);"><svg width="30" height="30" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="#44475a" stroke-width="8"/></svg></div>`;
+                if (!marker) {
+                    marker = L.marker(newPos, {icon: L.divIcon({html: arrowHtml, className:'div-arrow', iconSize:[30,30], iconAnchor:[15,15]})}).addTo(map);
+                } else { 
+                    marker.setLatLng(newPos); 
+                    marker.setIcon(L.divIcon({html: arrowHtml, className:'div-arrow', iconSize:[30,30], iconAnchor:[15,15]})); 
+                }
+
+                // Km-markeringar
+                let currentKm = Math.floor(totalDistance / 1000);
+                if (currentKm > lastKmMark) {
+                    lastKmMark = currentKm;
+                    L.marker(newPos, { icon: L.divIcon({ className: 'km-marker', html: lastKmMark, iconSize: [22, 22] }) }).addTo(map);
+                }
+            }, err => {
+                console.error("GPS-fel:", err);
+            }, {
+                enableHighAccuracy: true,
+                maximumAge: 1000
+            });
+        }
+
+        // --- NAMN & INDIVIDUELL EXPORT ---
+        function renameTrip(id) {
+            let trips = JSON.parse(localStorage.getItem('indigo_trips_v7') || '[]');
+            const index = trips.findIndex(t => t.id === id);
+            if (index !== -1) {
+                const newName = prompt("Namnge resan:", trips[index].name || trips[index].date);
+                if (newName) {
+                    trips[index].name = newName;
+                    localStorage.setItem('indigo_trips_v7', JSON.stringify(trips));
+                    loadHistory();
                 }
             }
         }
+
+        function exportSingleTrip(id) {
+            let trips = JSON.parse(localStorage.getItem('indigo_trips_v7') || '[]');
+            const trip = trips.find(t => t.id === id);
+            if (trip) {
+                const blob = new Blob([JSON.stringify([trip])], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.download = `catmap_${(trip.name || 'resa').replace(/\s/g, '_')}.json`;
+                a.href = url;
+                a.click();
+            }
+        }
+
+        function saveTrip() {
+            if (pathCoords.length < 2) return alert("För kort rutt för att spara.");
+            const mode = document.getElementById('timeMode').value;
+            const factor = (mode === 'chms') ? (4320 / 1000) : 3.6;
+            
+            const trip = { 
+                id: Date.now(), 
+                name: "Kattresa " + new Date().toLocaleDateString(),
+                date: new Date().toLocaleString(), 
+                dist: (totalDistance / 1000).toFixed(2), 
+                max: Math.round(maxSpeedMs * factor), 
+                time: document.getElementById('timer').innerText, 
+                unit: (mode === 'chms') ? "km/ch" : "km/h", 
+                route: pathCoords 
+            };
+            
+            let trips = JSON.parse(localStorage.getItem('indigo_trips_v7') || '[]');
+            trips.unshift(trip);
+            localStorage.setItem('indigo_trips_v7', JSON.stringify(trips));
+            loadHistory();
+            alert("Rutt sparad!");
+        }
+
+        function loadHistory() {
+            const list = document.getElementById('historyList');
+            let trips = JSON.parse(localStorage.getItem('indigo_trips_v7') || '[]');
+            list.innerHTML = trips.map(t => `
+                <div class="history-item">
+                    <strong style="color:var(--cyan)">${t.name || 'Namnlös rutt'}</strong><br>
+                    <small>${t.date}</small><br>
+                    ${t.dist} km | Max: ${t.max} ${t.unit}
+                    <div class="action-row">
+                        <button class="action-btn view-btn" onclick="viewRoute(${t.id})">VISA</button>
+                        <button class="action-btn edit-btn" onclick="renameTrip(${t.id})">NAMN</button>
+                        <button class="action-btn exp-single-btn" onclick="exportSingleTrip(${t.id})">UT</button>
+                        <button class="action-btn delete-btn" onclick="deleteTrip(${t.id})">RADERA</button>
+                    </div>
+                </div>`).join('');
+        }
+
+        function viewRoute(id) {
+            let trips = JSON.parse(localStorage.getItem('indigo_trips_v7') || '[]');
+            const trip = trips.find(t => t.id === id);
+            if (trip) {
+                historyLayer.clearLayers();
+                const historicalLine = L.polyline(trip.route, {color: '#bd93f9', weight: 5, dashArray: '10, 10'}).addTo(historyLayer);
+                map.fitBounds(historicalLine.getBounds());
+            }
+        }
+
+        function deleteTrip(id) {
+            if(confirm("Radera resa?")) {
+                let trips = JSON.parse(localStorage.getItem('indigo_trips_v7') || '[]');
+                trips = trips.filter(t => t.id !== id);
+                localStorage.setItem('indigo_trips_v7', JSON.stringify(trips));
+                loadHistory();
+            }
+        }
+
+        function exportTrips() {
+            const trips = localStorage.getItem('indigo_trips_v7') || '[]';
+            const blob = new Blob([trips], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.download = `catmap_alla_resor.json`;
+            a.href = url;
+            a.click();
+        }
+
+        function importTrips(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    let current = JSON.parse(localStorage.getItem('indigo_trips_v7') || '[]');
+                    const combined = [...imported, ...current];
+                    const unique = Array.from(new Map(combined.map(t => [t.id, t])).values());
+                    unique.sort((a,b) => b.id - a.id);
+                    localStorage.setItem('indigo_trips_v7', JSON.stringify(unique));
+                    loadHistory();
+                    alert("Importerat!");
+                } catch(err) { alert("Fel vid import."); }
+            };
+            reader.readAsText(file);
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            const btn = document.getElementById('pauseBtn');
+            if (isPaused) { pauseStartedAt = new Date(); btn.innerText = "Kör"; }
+            else { pausedTimeTotal += (new Date() - pauseStartedAt); btn.innerText = "Paus"; }
+        }
+
+        function stopTracking() { if(confirm("Nollställa allt?")) location.reload(); }
 
         function updateUI() {
-            const list = document.getElementById('stop-list');
-            const container = document.getElementById('stop-list-container');
-            list.innerHTML = '';
-            
-            if (stops.length > 0 && showList) {
-                container.style.display = 'block';
-                stops.forEach((s, i) => {
-                    // Uppdatera popupen med rätt knappar
-                    s.marker.setPopup(new maplibregl.Popup({offset:25}).setHTML(`
-                        <span class="popup-title">${s.name}</span>
-                        <button class="nav-btn" onclick="startNavigation()">STARTA RUTT</button>
-                        <button class="edit-btn" onclick="renameStop(${s.id})">✏️ ÄNDRA NAMN</button>
-                        <button class="del-btn" onclick="removeStop(${s.id})">TA BORT</button>
-                    `));
-
-                    const item = document.createElement('div');
-                    item.className = 'stop-item';
-                    item.innerHTML = `
-                        <span class="stop-name" onclick="renameStop(${s.id})">${i+1}. ${s.name}</span>
-                        <button class="edit-btn-small" onclick="renameStop(${s.id})">✏️</button>
-                        <button class="order-btn" onclick="moveStop(${i}, -1)">▲</button>
-                        <button class="order-btn" onclick="moveStop(${i}, 1)">▼</button>
-                    `;
-                    list.appendChild(item);
-                });
-            } else { container.style.display = 'none'; }
-        }
-
-        window.toggleList = function() {
-            showList = !showList;
-            document.getElementById('hideListBtn').innerText = showList ? "👁️" : "🙈";
-            updateUI();
-        }
-
-        window.removeStop = function(id) {
-            const idx = stops.findIndex(s => s.id === id);
-            if (idx !== -1) { 
-                stops[idx].marker.getPopup().remove();
-                stops[idx].marker.remove(); 
-                stops.splice(idx, 1); 
-                updateUI(); 
-                if(stops.length === 0) stopNavigation(); 
-            }
-        }
-
-        window.moveStop = function(idx, dir) {
-            const newIdx = idx + dir;
-            if (newIdx >= 0 && newIdx < stops.length) {
-                [stops[idx], stops[newIdx]] = [stops[newIdx], stops[idx]];
-                updateUI();
-                if (document.getElementById('nav-instruction-panel').style.display === 'block') startNavigation();
-            }
-        }
-
-        // NAVIGATION
-        window.startNavigation = async function() {
-            if (!userCoords) { alert("Väntar på GPS..."); return; }
-            if (stops.length === 0) return;
-            
-            const coords = [userCoords, ...stops.map(s => [s.lng, s.lat])];
-            const url = `https://router.project-osrm.org/route/v1/driving/${coords.map(c => c.join(',')).join(';')}?overview=full&geometries=geojson&steps=true&language=sv`;
-            
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                if (!data.routes || data.routes.length === 0) return;
+            const mode = document.getElementById('timeMode').value;
+            const now = new Date();
+            document.getElementById('mapClock').innerText = now.toLocaleTimeString();
+            if (startTime) {
+                let diffMs = (isPaused ? pauseStartedAt : now) - startTime - pausedTimeTotal;
+                let sTotal = Math.max(0, diffMs / 1000);
+                document.getElementById('timer').innerText = new Date(sTotal * 1000).toISOString().substr(11, 8);
                 
-                const route = data.routes[0];
+                let factor = (mode === 'chms') ? (4320 / 1000) : 3.6;
+                document.getElementById('curSpeed').innerText = Math.round((isPaused ? 0 : currentSpeedMs) * factor);
+                document.getElementById('maxSpeed').innerText = Math.round(maxSpeedMs * factor);
+                document.getElementById('avgSpeed').innerText = sTotal > 0 ? Math.round((totalDistance / sTotal) * factor) : 0;
+                document.getElementById('speedUnit').innerText = (mode === 'chms') ? "km/ch" : "km/h";
+                document.getElementById('dist').innerText = (totalDistance / 1000).toFixed(2) + " km";
+            }
+        }
 
-                if (map.getSource('route')) { map.getSource('route').setData(route.geometry); } 
-                else {
-                    map.addSource('route', { type: 'geojson', data: route.geometry });
-                    map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#50fa7b', 'line-width': 6 } });
+        // Resizer-logik (behålls från förra versionen)
+        const resizer = document.getElementById('resizer');
+        resizer.addEventListener('touchstart', (e) => {
+            const moveHandler = (me) => {
+                let newH = me.touches[0].clientY - document.getElementById('ui-header').offsetHeight;
+                if (newH > 50 && newH < window.innerHeight - 200) {
+                    document.getElementById('map').style.height = newH + 'px';
+                    map.invalidateSize();
                 }
+            };
+            const endHandler = () => {
+                window.removeEventListener('touchmove', moveHandler);
+                window.removeEventListener('touchend', endHandler);
+            };
+            window.addEventListener('touchmove', moveHandler);
+            window.addEventListener('touchend', endHandler);
+        });
 
-                currentRouteSteps = route.legs[0].steps;
-                const instr = currentRouteSteps[0].maneuver.instruction;
-                document.getElementById('instruction-text').innerText = instr;
-                document.getElementById('distance-remaining').innerText = `${(route.distance/1000).toFixed(1)} km kvar`;
-                document.getElementById('nav-instruction-panel').style.display = 'block';
-
-                if (instr !== lastInstruction) { speak(instr); lastInstruction = instr; }
-                
-                // Stäng popups när rutt startar
-                stops.forEach(s => s.marker.getPopup().remove());
-            } catch (e) { console.error("Ruttfel:", e); }
-        }
-
-        window.stopNavigation = function() {
-            if (map.getSource('route')) { map.removeLayer('route-line'); map.removeSource('route'); }
-            document.getElementById('nav-instruction-panel').style.display = 'none';
-            lastInstruction = "";
-        }
-
-        window.clearAll = function() {
-            stops.forEach(s => s.marker.remove()); stops = [];
-            stopNavigation(); updateUI();
-        }
-
-        // GPS
-        navigator.geolocation.watchPosition(pos => {
-            userCoords = [pos.coords.longitude, pos.coords.latitude];
-            if (!userMarker) {
-                userMarker = new maplibregl.Marker({ element: createArrow() }).setLngLat(userCoords).addTo(map);
-                map.setCenter(userCoords); map.setZoom(16);
-            } else { userMarker.setLngLat(userCoords); }
-            if (followUser) map.easeTo({ center: userCoords });
-            if (document.getElementById('nav-instruction-panel').style.display === 'block') startNavigation();
-        }, null, { enableHighAccuracy: true });
-
-        function createArrow() {
-            const el = document.createElement('div');
-            el.innerHTML = `<svg width="40" height="40" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#7582ff" stroke="#fff" stroke-width="3"/></svg>`;
-            return el;
-        }
-
-        function toggleLock(val) { followUser = (val !== undefined) ? val : !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }
-        map.on('dragstart', () => toggleLock(false));
-
-        // LÅNGTRYCK
-        map.on('mousedown', (e) => pressTimer = setTimeout(() => addStop(e.lngLat.lat, e.lngLat.lng, "Vald punkt"), 800));
-        map.on('mouseup', () => clearTimeout(pressTimer));
-        map.on('touchstart', (e) => { if(e.points.length === 1) pressTimer = setTimeout(() => addStop(e.lngLat.lat, e.lngLat.lng, "Vald punkt"), 800); });
-        map.on('touchend', () => clearTimeout(pressTimer));
+        window.onload = initMap;
     </script>
 </body>
 </html>

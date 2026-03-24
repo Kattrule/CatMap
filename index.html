@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CatMap Ultra</title>
+    <title>CatMap v3</title>
     
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -11,77 +11,76 @@
     <style>
         :root {
             --indigo: #7582ff;
-            --bg-glass: rgba(15, 15, 30, 0.98);
+            --bg-glass: rgba(15, 15, 30, 0.95);
             --cyan: #8be9fd;
             --yellow: #f1fa8c;
             --red: #ff5555;
             --green: #50fa7b;
         }
 
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: white; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: sans-serif; }
         #map { height: 100%; width: 100%; position: absolute; }
 
-        /* NAV-PANEL (När du kör) */
+        /* NAVIGERING */
         #nav-panel {
             position: absolute; top: 10px; left: 10px; right: 10px; z-index: 4000;
-            background: var(--bg-glass); border: 2px solid var(--green);
-            border-radius: 15px; padding: 15px; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            background: var(--bg-glass); border: 2px solid var(--cyan);
+            border-radius: 15px; padding: 15px; display: none; backdrop-filter: blur(10px);
         }
 
         /* STOPP-LISTA */
         #stop-list-container {
-            position: absolute; bottom: 20px; left: 10px; width: 300px;
+            position: absolute; bottom: 20px; left: 10px; width: 280px;
             z-index: 3000; background: var(--bg-glass); border: 1px solid var(--indigo);
             border-radius: 15px; padding: 12px; display: none; flex-direction: column;
-            transition: transform 0.3s ease;
         }
 
-        .list-content { max-height: 40vh; overflow-y: auto; margin: 10px 0; }
+        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        #stop-list { max-height: 30vh; overflow-y: auto; }
         
         .stop-item {
             display: flex; align-items: center; background: rgba(255,255,255,0.1);
-            margin-bottom: 8px; padding: 10px; border-radius: 10px; gap: 8px;
+            margin-bottom: 6px; padding: 8px; border-radius: 8px; gap: 5px;
         }
-        .stop-name { flex-grow: 1; font-size: 0.9rem; font-weight: bold; }
+        .stop-name { flex-grow: 1; color: white; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* KNAPPAR */
-        .btn { border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-weight: bold; color: white; }
-        .btn-edit { background: var(--indigo); padding: 5px 8px; }
-        .btn-del { background: var(--red); padding: 5px 8px; }
-        .btn-start { background: var(--green); color: black; width: 100%; margin-top: 10px; height: 45px; font-size: 1rem; }
-        .btn-hide { background: #333; font-size: 0.7rem; padding: 4px 8px; }
+        .btn { border: none; border-radius: 8px; padding: 8px; cursor: pointer; font-weight: bold; color: white; font-size: 0.7rem; }
+        .btn-green { background: var(--green); color: black; width: 100%; height: 40px; font-size: 0.9rem; margin-top: 10px; }
+        .btn-red { background: var(--red); }
+        .btn-edit { background: var(--indigo); }
+        .btn-hide { background: #444; padding: 5px 10px; }
 
-        .map-tools { position: absolute; bottom: 30px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 15px; }
+        .map-tools { position: absolute; bottom: 30px; right: 20px; z-index: 1000; }
         .tool-btn { width: 60px; height: 60px; background: var(--bg-glass); border: 2px solid var(--indigo); border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; }
 
-        .hidden { display: none !important; }
+        #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; color: white; }
     </style>
 </head>
 <body>
 
+    <div id="loading-overlay">Beräknar rutt...</div>
+
     <div id="nav-panel">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div id="instruction-box">
-                <div id="instruction-text" style="font-size: 1.2rem; font-weight: bold;">Beräknar...</div>
-                <div id="turn-dist" style="color: var(--yellow); font-family: monospace; font-size: 1.1rem; margin-top: 5px;">---</div>
+            <div>
+                <div id="instruction-text" style="color: white; font-weight: bold; font-size: 1.1rem;">Startar...</div>
+                <div id="turn-dist" style="color: var(--yellow); font-family: monospace; margin-top: 5px;">---</div>
             </div>
-            <button onclick="repeatInstruction()" style="background: none; border: none; font-size: 2rem; cursor: pointer;">🔊</button>
+            <button onclick="repeatInstruction()" style="background:none; border:none; font-size:1.5rem;">🔊</button>
         </div>
-        <button onclick="stopNavigation()" style="background: var(--red); color: white; border: none; width: 100%; padding: 10px; border-radius: 8px; margin-top: 15px; font-weight: bold;">AVBRYT</button>
+        <button onclick="stopNavigation()" class="btn btn-red" style="width:100%; margin-top:10px; height:35px;">AVBRYT</button>
     </div>
 
     <div id="stop-list-container">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: var(--cyan); font-weight: bold; font-size: 0.8rem;">DIN RUTT</span>
-            <button class="btn btn-hide" id="toggle-list-btn" onclick="toggleListView()">DÖLJ ^</button>
+        <div class="list-header">
+            <span style="color: var(--cyan); font-weight: bold; font-size: 0.8rem;">STOPP</span>
+            <button class="btn btn-hide" onclick="toggleList()">GÖM LISTA</button>
         </div>
-        
-        <div id="list-wrapper">
-            <div class="list-content" id="stop-list"></div>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-start" onclick="startNavigation()">STARTA RUTT</button>
-                <button class="btn" style="background: var(--red); margin-top:10px;" onclick="clearAll()">TÖM</button>
-            </div>
+        <div id="list-content">
+            <div id="stop-list"></div>
+            <button class="btn btn-green" onclick="startNavigation()">STARTA RUTT</button>
+            <button class="btn btn-red" style="width:100%; margin-top:5px;" onclick="clearAll()">TÖM ALLT</button>
         </div>
     </div>
 
@@ -94,7 +93,7 @@
     <script>
         let userCoords = null, userMarker = null, followUser = true;
         let stops = [], isNavigating = false, routeSteps = [], currentStepIndex = 0;
-        let lastSpokenDist = Infinity;
+        let pressTimer, lastSpokenDist = Infinity;
 
         const map = new maplibregl.Map({
             container: 'map',
@@ -119,7 +118,20 @@
             if(routeSteps[currentStepIndex]) speak(routeSteps[currentStepIndex].maneuver.instruction);
         }
 
-        // --- STOPP HANTERING ---
+        // --- GÖM LISTAN ---
+        function toggleList() {
+            const content = document.getElementById('list-content');
+            const btn = event.target;
+            if (content.style.display === "none") {
+                content.style.display = "block";
+                btn.innerText = "GÖM LISTA";
+            } else {
+                content.style.display = "none";
+                btn.innerText = "VISA LISTA";
+            }
+        }
+
+        // --- HANTERA STOPP ---
         function updateUI() {
             const list = document.getElementById('stop-list');
             const container = document.getElementById('stop-list-container');
@@ -133,20 +145,11 @@
                     div.innerHTML = `
                         <span class="stop-name">${i+1}. ${s.name}</span>
                         <button class="btn btn-edit" onclick="renameStop(${s.id})">✏️</button>
-                        <button class="btn btn-del" onclick="removeStop(${s.id})">🗑️</button>
+                        <button class="btn btn-red" onclick="removeStop(${s.id})" style="padding:4px 8px;">🗑️</button>
                     `;
                     list.appendChild(div);
                 });
-            } else if (!isNavigating) {
-                container.style.display = 'none';
-            }
-        }
-
-        function toggleListView() {
-            const wrapper = document.getElementById('list-wrapper');
-            const btn = document.getElementById('toggle-list-btn');
-            wrapper.classList.toggle('hidden');
-            btn.innerText = wrapper.classList.contains('hidden') ? "VISA v" : "DÖLJ ^";
+            } else if (!isNavigating) { container.style.display = 'none'; }
         }
 
         function renameStop(id) {
@@ -160,11 +163,23 @@
             if(i > -1) { stops[i].marker.remove(); stops.splice(i, 1); updateUI(); }
         }
 
-        // --- KARTA ---
-        let pressTimer;
-        map.on('mousedown', e => pressTimer = setTimeout(() => addStop(e.lngLat), 600));
+        // --- FIX FÖR NÅLAR (Placeras bara om man håller still) ---
+        let mapMoved = false;
+        map.on('movestart', () => mapMoved = true);
+        
+        map.on('mousedown', e => {
+            mapMoved = false;
+            pressTimer = setTimeout(() => {
+                if (!mapMoved) addStop(e.lngLat);
+            }, 800);
+        });
         map.on('mouseup', () => clearTimeout(pressTimer));
-        map.on('touchstart', e => pressTimer = setTimeout(() => addStop(e.lngLat), 600));
+        map.on('touchstart', e => {
+            mapMoved = false;
+            pressTimer = setTimeout(() => {
+                if (!mapMoved) addStop(e.lngLat);
+            }, 800);
+        });
         map.on('touchend', () => clearTimeout(pressTimer));
 
         function addStop(lngLat) {
@@ -176,8 +191,10 @@
 
         // --- NAVIGATION ---
         async function startNavigation() {
-            if (!userCoords) return alert("GPS ej redo. Vänta på lila pil!");
-            if (stops.length === 0) return alert("Lägg till stopp först!");
+            if (!userCoords) return alert("Hittar inte din position ännu. Vänta på den lila pilen.");
+            if (stops.length === 0) return alert("Du måste sätta minst en nål på kartan!");
+
+            document.getElementById('loading-overlay').style.display = 'flex';
 
             const pts = [userCoords, ...stops.map(s => [s.lngLat.lng, s.lngLat.lat])].map(c => c.join(',')).join(';');
             const url = `https://router.project-osrm.org/route/v1/driving/${pts}?overview=full&geometries=geojson&steps=true&language=sv`;
@@ -185,7 +202,12 @@
             try {
                 const res = await fetch(url);
                 const data = await res.json();
-                if (data.code !== 'Ok') throw "Route error";
+                document.getElementById('loading-overlay').style.display = 'none';
+
+                if (data.code !== 'Ok') {
+                    alert("Kunde inte skapa rutt. Försök att sätta nålarna närmare en väg.");
+                    return;
+                }
 
                 routeSteps = [];
                 data.routes[0].legs.forEach(l => routeSteps = routeSteps.concat(l.steps));
@@ -202,7 +224,8 @@
 
                 updateNavLoop();
             } catch (e) {
-                alert("Kunde inte hämta rutt. Kolla internet!");
+                document.getElementById('loading-overlay').style.display = 'none';
+                alert("Internetfel! Kontrollera uppkopplingen och försök igen.");
             }
         }
 
@@ -215,10 +238,9 @@
             document.getElementById('instruction-text').innerText = step.maneuver.instruction;
             document.getElementById('turn-dist').innerText = d > 1000 ? (d/1000).toFixed(1) + " km" : Math.round(d) + " m";
 
-            // RÖSTLOGIK
             if (d <= 3000 && lastSpokenDist > 3000) { speak("Om tre kilometer: " + step.maneuver.instruction); lastSpokenDist = 3000; }
             if (d <= 300 && lastSpokenDist > 300) { speak("Om trehundra meter: " + step.maneuver.instruction); lastSpokenDist = 300; }
-            if (d <= 30 && lastSpokenDist > 30) { speak("Nu: " + step.maneuver.instruction); lastSpokenDist = 30; }
+            if (d <= 30 && lastSpokenDist > 30) { speak(step.maneuver.instruction); lastSpokenDist = 30; }
 
             if (d < 15) {
                 currentStepIndex++;
@@ -226,7 +248,7 @@
                 if (currentStepIndex >= routeSteps.length) {
                     speak("Du är framme!");
                     stopNavigation();
-                }
+                } else { updateNavLoop(); }
             }
         }
 
@@ -246,10 +268,8 @@
 
         function calcDist(lat1, lon1, lat2, lon2) {
             const R = 6371e3;
-            const p1 = lat1 * Math.PI/180;
-            const p2 = lat2 * Math.PI/180;
-            const dp = (lat2-lat1) * Math.PI/180;
-            const dl = (lon2-lon1) * Math.PI/180;
+            const p1 = lat1 * Math.PI/180, p2 = lat2 * Math.PI/180;
+            const dp = (lat2-lat1) * Math.PI/180, dl = (lon2-lon1) * Math.PI/180;
             const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
@@ -268,10 +288,9 @@
             arrow.style.transform = `rotate(${p.coords.heading || 0}deg)`;
             if (followUser) map.easeTo({ center: userCoords });
             if (isNavigating) updateNavLoop();
-        }, e => console.log(e), { enableHighAccuracy: true });
+        }, null, { enableHighAccuracy: true });
 
         function toggleLock() { followUser = !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }
-        map.on('dragstart', () => { followUser = false; document.getElementById('lockBtn').innerText = "🔓"; });
     </script>
 </body>
 </html>

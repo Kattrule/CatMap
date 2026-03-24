@@ -22,13 +22,14 @@
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: sans-serif; color: white; }
         #map { height: 100%; width: 100%; position: absolute; }
 
+        /* SÖKFÄLT */
         #search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 3000; }
         #search-input {
             width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--indigo);
             background: var(--bg-glass); color: white; backdrop-filter: blur(10px); box-sizing: border-box; outline: none;
         }
 
-        /* NAV-PANEL (Vägbeskrivning under sökfältet) */
+        /* NAV-PANEL */
         #nav-panel {
             position: absolute; top: 65px; left: 10px; right: 10px; z-index: 2500;
             background: var(--bg-glass); border: 1px solid var(--cyan);
@@ -40,28 +41,37 @@
 
         /* STOPP-LISTA */
         #stop-list-container {
-            position: absolute; bottom: 100px; left: 10px; width: 260px;
-            max-height: 40vh; display: flex; flex-direction: column; z-index: 2000;
+            position: absolute; bottom: 100px; left: 10px; width: 280px;
+            max-height: 45vh; display: flex; flex-direction: column; z-index: 2000;
             background: var(--bg-glass); border: 1px solid var(--indigo);
-            border-radius: 10px; padding: 10px; display: none; backdrop-filter: blur(10px);
+            border-radius: 15px; padding: 12px; backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
         }
+        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         #stop-list { overflow-y: auto; flex-grow: 1; margin-bottom: 10px; }
+        
         .stop-item {
-            display: flex; align-items: center; background: rgba(255,255,255,0.1);
-            margin-bottom: 5px; padding: 5px 8px; border-radius: 5px; font-size: 0.8rem;
+            display: flex; align-items: center; background: rgba(255,255,255,0.08);
+            margin-bottom: 6px; padding: 8px; border-radius: 8px; font-size: 0.85rem;
         }
-        .stop-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 5px; }
-        .stop-btn { background: none; border: none; color: white; cursor: pointer; padding: 2px 5px; font-size: 1rem; }
+        .stop-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         
         /* KNAPPAR */
-        .btn-group { display: flex; gap: 5px; margin-top: auto; }
-        .nav-btn-main { flex: 2; background: var(--green); color: #000; border: none; padding: 10px; border-radius: 5px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 0.7rem; }
-        .clear-btn-small { flex: 1; background: var(--red); color: #fff; border: none; padding: 10px; border-radius: 5px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 0.7rem; }
+        .btn-group { display: flex; gap: 8px; }
+        .nav-btn-main { flex: 2; background: var(--green); color: #000; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 0.75rem; }
+        .clear-btn-small { flex: 1; background: var(--red); color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 0.75rem; }
+        .stop-btn { background: none; border: none; color: white; cursor: pointer; padding: 0 5px; font-size: 1.1rem; opacity: 0.7; }
+        .stop-btn:hover { opacity: 1; }
         
+        /* DÖLJ-KNAPP */
+        #hide-btn { background: var(--indigo); color: white; border: none; border-radius: 5px; padding: 2px 8px; cursor: pointer; font-size: 0.8rem; }
+
         .map-tools { position: absolute; bottom: 25px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
         .tool-btn { width: 55px; height: 55px; background: var(--bg-glass); border: 2px solid var(--indigo); border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.3rem; cursor: pointer; }
+        .voice-indicator { float: right; font-size: 1.5rem; cursor: pointer; padding: 5px; }
 
-        .voice-indicator { float: right; font-size: 1.5rem; cursor: pointer; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 50%; }
+        /* När listan är gömd */
+        .minimized { height: 40px !important; overflow: hidden !important; width: 120px !important; }
     </style>
 </head>
 <body>
@@ -73,19 +83,22 @@
     <div id="nav-panel">
         <div class="voice-indicator" onclick="repeatInstruction()">🔊</div>
         <div id="instruction-box">
-            <span id="instruction-text">Beräknar rutt...</span>
-            <span id="turn-dist">Beräknar avstånd...</span>
+            <span id="instruction-text">Väntar på rutt...</span>
+            <span id="turn-dist">---</span>
         </div>
-        <div style="margin-top:15px; display:flex; gap:10px;">
-            <button onclick="stopNavigation()" style="background:var(--red); border:none; color:white; padding:10px; border-radius:5px; font-size:0.8rem; font-weight:bold; flex:1;">TILLBAKA</button>
+        <div style="margin-top:15px;">
+            <button onclick="stopNavigation()" style="background:var(--red); border:none; color:white; padding:12px; border-radius:8px; font-size:0.8rem; font-weight:bold; width:100%;">AVBRYT NAVIGERING</button>
         </div>
     </div>
 
     <div id="stop-list-container">
-        <div style="font-size:0.7rem; color:var(--cyan); margin-bottom:8px; font-weight:bold; letter-spacing:1px;">AKTUELL RUTT</div>
+        <div class="list-header">
+            <span style="font-size:0.7rem; color:var(--cyan); font-weight:bold; letter-spacing:1px;">RUTT</span>
+            <button id="hide-btn" onclick="toggleList()">DÖLJ ^</button>
+        </div>
         <div id="stop-list"></div>
         <div class="btn-group">
-            <button class="nav-btn-main" onclick="startNavigation()">STARTA RUTT</button>
+            <button class="nav-btn-main" onclick="startNavigation()">STARTA</button>
             <button class="clear-btn-small" onclick="clearAll()">TÖM</button>
         </div>
     </div>
@@ -99,13 +112,7 @@
     <script>
         let followUser = true, userMarker = null, userCoords = null;
         let stops = [], isMapMoving = false, pressTimer;
-        
-        // Navigeringsvariabler
-        let isNavigating = false;
-        let routeSteps = [];
-        let currentStepIndex = 0;
-        let lastSpokenDistance = Infinity;
-        let currentRouteGeometry = null;
+        let isNavigating = false, routeSteps = [], currentStepIndex = 0, lastSpokenDistance = Infinity;
 
         const map = new maplibregl.Map({
             container: 'map',
@@ -114,7 +121,7 @@
                 sources: { 's-tiles': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], tileSize: 256 } },
                 layers: [{ id: 's-layer', type: 'raster', source: 's-tiles' }]
             },
-            center: [15.0, 62.0], zoom: 4, doubleClickZoom: false
+            center: [15.0, 62.0], zoom: 4
         });
 
         // --- RÖST ---
@@ -123,51 +130,30 @@
             window.speechSynthesis.cancel();
             const msg = new SpeechSynthesisUtterance(text);
             msg.lang = 'sv-SE';
-            msg.rate = 1.0;
             window.speechSynthesis.speak(msg);
         }
 
         function repeatInstruction() {
-            if (routeSteps.length > 0 && currentStepIndex < routeSteps.length) {
-                speak(routeSteps[currentStepIndex].maneuver.instruction);
-            }
+            if (routeSteps[currentStepIndex]) speak(routeSteps[currentStepIndex].maneuver.instruction);
         }
 
-        // --- KARTINTERAKTION ---
-        map.on('movestart', () => isMapMoving = true);
-        map.on('moveend', () => isMapMoving = false);
-
-        function placePin(lngLat) {
-            if (isMapMoving || isNavigating) return;
-            const id = Date.now();
-            const marker = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).addTo(map);
-            stops.push({ id, marker, lngLat, name: `Stopp ${stops.length + 1}` });
-            updateUI();
+        // --- UI LOGIK ---
+        function toggleList() {
+            const el = document.getElementById('stop-list-container');
+            const btn = document.getElementById('hide-btn');
+            el.classList.toggle('minimized');
+            btn.innerText = el.classList.contains('minimized') ? "VISA v" : "DÖLJ ^";
         }
 
-        map.on('mousedown', (e) => pressTimer = setTimeout(() => placePin(e.lngLat), 800));
-        map.on('mouseup', () => clearTimeout(pressTimer));
-        map.on('touchstart', (e) => { if(e.points.length === 1) pressTimer = setTimeout(() => placePin(e.lngLat), 800); });
-        map.on('touchend', () => clearTimeout(pressTimer));
-
-        // --- STOPPLISTA LOGIK ---
         function renameStop(id) {
             const stop = stops.find(s => s.id === id);
-            if (!stop) return;
-            const newName = prompt("Döp om stopp:", stop.name);
-            if (newName && newName.trim() !== "") {
-                stop.name = newName.trim();
-                updateUI();
-            }
+            const newName = prompt("Nytt namn på stopp:", stop.name);
+            if (newName) { stop.name = newName; updateUI(); }
         }
 
         function removeStop(id) {
-            const index = stops.findIndex(s => s.id === id);
-            if (index > -1) {
-                stops[index].marker.remove();
-                stops.splice(index, 1);
-                updateUI();
-            }
+            const idx = stops.findIndex(s => s.id === id);
+            if (idx > -1) { stops[idx].marker.remove(); stops.splice(idx, 1); updateUI(); }
         }
 
         function updateUI() {
@@ -187,183 +173,119 @@
                     `;
                     list.appendChild(item);
                 });
-            } else { 
-                container.style.display = 'none'; 
+            } else if (stops.length === 0) {
+                container.style.display = 'none';
             }
         }
 
-        window.clearAll = function() {
-            stops.forEach(s => s.marker.remove());
-            stops = [];
-            stopNavigation();
+        // --- KARTA & PINNAR ---
+        function placePin(lngLat) {
+            if (isNavigating) return;
+            const marker = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).addTo(map);
+            stops.push({ id: Date.now(), marker, lngLat, name: `Stopp ${stops.length + 1}` });
             updateUI();
         }
 
-        // --- RUTT OCH NAVIGERING ---
-        
-        // Hjälpfunktion för att beräkna avstånd (Haversine formula)
-        function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // Jordens radie i meter
-            const p1 = lat1 * Math.PI/180;
-            const p2 = lat2 * Math.PI/180;
-            const dp = (lat2-lat1) * Math.PI/180;
-            const dl = (lon2-lon1) * Math.PI/180;
-            const a = Math.sin(dp/2) * Math.sin(dp/2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl/2) * Math.sin(dl/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
-        }
+        map.on('mousedown', (e) => pressTimer = setTimeout(() => placePin(e.lngLat), 800));
+        map.on('mouseup', () => clearTimeout(pressTimer));
+        map.on('touchstart', (e) => pressTimer = setTimeout(() => placePin(e.lngLat), 800));
+        map.on('touchend', () => clearTimeout(pressTimer));
 
-        window.startNavigation = async function() {
-            if (!userCoords) return alert("Väntar på GPS-position...");
-            if (stops.length === 0) return alert("Lägg till minst ett stopp först!");
+        // --- NAVIGATION ---
+        async function startNavigation() {
+            if (!userCoords) return alert("Väntar på GPS... Se till att platstjänster är på.");
+            if (stops.length === 0) return alert("Markera ett stopp på kartan först!");
 
-            document.getElementById('stop-list-container').style.display = 'none';
-            document.getElementById('nav-panel').style.display = 'block';
-            isNavigating = true;
+            const coords = [userCoords, ...stops.map(s => [s.lngLat.lng, s.lngLat.lat])].map(c => c.join(',')).join(';');
+            const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true&language=sv`;
 
-            const coordsString = [userCoords, ...stops.map(s => [s.lngLat.lng, s.lngLat.lat])]
-                                .map(c => c.join(',')).join(';');
-            
-            // Hämtar rutt med sväng-för-sväng-instruktioner på svenska
-            const url = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson&steps=true&language=sv`;
-            
             try {
                 const res = await fetch(url);
                 const data = await res.json();
-                if (!data.routes || data.routes.length === 0) throw new Error("Kunde inte hitta en rutt");
+                if (data.code !== 'Ok') throw new Error();
 
-                const route = data.routes[0];
-                currentRouteGeometry = route.geometry;
-
-                // Rita rutten på kartan
-                if (map.getSource('route')) { 
-                    map.getSource('route').setData(currentRouteGeometry); 
-                } else {
-                    map.addSource('route', { type: 'geojson', data: currentRouteGeometry });
-                    map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': 6 } });
-                }
-
-                // Samla alla 'steps' (instruktioner) från alla 'legs' (delsträckor mellan stopp)
                 routeSteps = [];
-                route.legs.forEach(leg => {
-                    routeSteps = routeSteps.concat(leg.steps);
-                });
-
+                data.routes[0].legs.forEach(leg => routeSteps = routeSteps.concat(leg.steps));
                 currentStepIndex = 0;
                 lastSpokenDistance = Infinity;
-                
-                // Starta navigering
-                updateNavigationLogic();
+                isNavigating = true;
 
-            } catch (e) { 
-                console.error(e);
-                alert("Ett fel uppstod när rutten skulle beräknas.");
-                stopNavigation();
+                document.getElementById('stop-list-container').style.display = 'none';
+                document.getElementById('nav-panel').style.display = 'block';
+
+                if (map.getSource('route')) map.removeSource('route');
+                map.addSource('route', { type: 'geojson', data: data.routes[0].geometry });
+                map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': 6 } });
+
+                updateNavigation();
+            } catch (e) {
+                alert("Kunde inte skapa rutt. Kontrollera internetanslutningen.");
             }
         }
 
-        window.stopNavigation = function() {
-            isNavigating = false;
-            document.getElementById('nav-panel').style.display = 'none';
-            if (map.getSource('route')) { 
-                map.removeLayer('route-line'); 
-                map.removeSource('route'); 
-            }
-            window.speechSynthesis.cancel();
-            updateUI(); // Visar stopplistan igen
-        }
+        function updateNavigation() {
+            if (!isNavigating || !routeSteps[currentStepIndex]) return;
 
-        // Logiken som körs varje gång GPS:en uppdateras under navigering
-        function updateNavigationLogic() {
-            if (!isNavigating || routeSteps.length === 0 || currentStepIndex >= routeSteps.length) return;
+            const step = routeSteps[currentStepIndex];
+            const dist = getDist(userCoords[1], userCoords[0], step.maneuver.location[1], step.maneuver.location[0]);
 
-            const currentStep = routeSteps[currentStepIndex];
-            const maneuverCoords = currentStep.maneuver.location; // [lng, lat]
-            
-            // Beräkna avstånd från nuvarande position till nästa sväng
-            const distanceToTurn = getDistanceFromLatLonInMeters(
-                userCoords[1], userCoords[0], 
-                maneuverCoords[1], maneuverCoords[0]
-            );
+            document.getElementById('instruction-text').innerText = step.maneuver.instruction;
+            document.getElementById('turn-dist').innerText = dist > 1000 ? `Om ${(dist/1000).toFixed(1)} km` : `Om ${Math.round(dist)} m`;
 
-            const instruction = currentStep.maneuver.instruction;
-            document.getElementById('instruction-text').innerText = instruction;
-            
-            // Uppdatera avståndstexten (visa km om > 1000m)
-            if (distanceToTurn > 1000) {
-                document.getElementById('turn-dist').innerText = `Om ${(distanceToTurn/1000).toFixed(1)} km`;
-            } else {
-                document.getElementById('turn-dist').innerText = `Om ${Math.round(distanceToTurn)} meter`;
-            }
+            // Röstvarningar
+            if (dist <= 3000 && lastSpokenDistance > 3000) { speak("Om tre kilometer, " + step.maneuver.instruction); lastSpokenDistance = 3000; }
+            if (dist <= 300 && lastSpokenDistance > 300) { speak("Om trehundra meter, " + step.maneuver.instruction); lastSpokenDistance = 300; }
+            if (dist <= 30 && lastSpokenDistance > 30) { speak(step.maneuver.instruction); lastSpokenDistance = 30; }
 
-            // --- RÖSTVARNINGAR (3km, 300m, 30m, 10m) ---
-            let shouldSpeak = false;
-
-            if (distanceToTurn <= 3000 && lastSpokenDistance > 3000) {
-                shouldSpeak = true; lastSpokenDistance = 3000;
-            } else if (distanceToTurn <= 300 && lastSpokenDistance > 300) {
-                shouldSpeak = true; lastSpokenDistance = 300;
-            } else if (distanceToTurn <= 30 && lastSpokenDistance > 30) {
-                shouldSpeak = true; lastSpokenDistance = 30;
-            } else if (distanceToTurn <= 10 && lastSpokenDistance > 10) {
-                shouldSpeak = true; lastSpokenDistance = 10;
-            }
-
-            if (shouldSpeak) {
-                let textToSpeak = instruction;
-                // Lägg till avstånd i början av meningen för tydlighet (förutom vid 10m)
-                if (lastSpokenDistance > 10) {
-                     const distText = lastSpokenDistance === 3000 ? "3 kilometer" : `${lastSpokenDistance} meter`;
-                     textToSpeak = `Om ${distText}, ${instruction}`;
-                }
-                speak(textToSpeak);
-            }
-
-            // Gå till nästa instruktion om vi är extremt nära (< 15 meter)
-            if (distanceToTurn < 15) {
+            if (dist < 15) {
                 currentStepIndex++;
-                lastSpokenDistance = Infinity; // Återställ för nästa steg
+                lastSpokenDistance = Infinity;
                 if (currentStepIndex >= routeSteps.length) {
-                    speak("Du är framme vid din destination.");
-                    document.getElementById('instruction-text').innerText = "Framme!";
-                    document.getElementById('turn-dist').innerText = "";
+                    speak("Du är framme!");
                     setTimeout(stopNavigation, 5000);
                 } else {
-                    // Läs upp nästa instruktion direkt
-                    updateNavigationLogic();
+                    updateNavigation();
                 }
             }
         }
 
-        // --- GPS SPÅRNING ---
+        function getDist(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const dLat = (lat2-lat1)*Math.PI/180;
+            const dLon = (lon2-lon1)*Math.PI/180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function stopNavigation() {
+            isNavigating = false;
+            document.getElementById('nav-panel').style.display = 'none';
+            if (map.getLayer('route-line')) map.removeLayer('route-line');
+            if (map.getSource('route')) map.removeSource('route');
+            updateUI();
+        }
+
+        function clearAll() {
+            stops.forEach(s => s.marker.remove());
+            stops = [];
+            stopNavigation();
+        }
+
+        // --- GPS ---
         const myEl = document.createElement('div');
-        myEl.innerHTML = `<svg width="30" height="30" viewBox="0 0 100 100" id="me"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="black" stroke-width="5"/></svg>`;
+        myEl.innerHTML = `<svg width="30" height="30" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="black" stroke-width="5"/></svg>`;
         
         navigator.geolocation.watchPosition(pos => {
             userCoords = [pos.coords.longitude, pos.coords.latitude];
-            
             if (!userMarker) {
                 userMarker = new maplibregl.Marker({ element: myEl }).setLngLat(userCoords).addTo(map);
-                map.setCenter(userCoords); 
-                map.setZoom(15);
-            } else { 
-                userMarker.setLngLat(userCoords); 
-            }
-            
-            document.getElementById('me').style.transform = `rotate(${pos.coords.heading || 0}deg)`;
+                map.setCenter(userCoords); map.setZoom(16);
+            } else userMarker.setLngLat(userCoords);
             if (followUser) map.easeTo({ center: userCoords });
-
-            // Uppdatera navigeringen om den är aktiv
-            if (isNavigating) {
-                updateNavigationLogic();
-            }
-
+            if (isNavigating) updateNavigation();
         }, null, { enableHighAccuracy: true });
 
-        function toggleLock() { 
-            followUser = !followUser; 
-            document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; 
-        }
+        function toggleLock() { followUser = !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }
         map.on('dragstart', () => { if (followUser) toggleLock(); });
     </script>
 </body>

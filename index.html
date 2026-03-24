@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CatMap</title>
+    <title>CatMap Ultra</title>
     
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -11,95 +11,77 @@
     <style>
         :root {
             --indigo: #7582ff;
-            --bg-glass: rgba(15, 15, 30, 0.95);
+            --bg-glass: rgba(15, 15, 30, 0.98);
             --cyan: #8be9fd;
             --yellow: #f1fa8c;
             --red: #ff5555;
             --green: #50fa7b;
-            --purple: #bd93f9;
         }
 
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: sans-serif; color: white; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: white; }
         #map { height: 100%; width: 100%; position: absolute; }
 
-        /* SÖKFÄLT */
-        #search-container { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 3000; }
-        #search-input {
-            width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--indigo);
-            background: var(--bg-glass); color: white; backdrop-filter: blur(10px); box-sizing: border-box; outline: none;
-        }
-
-        /* NAV-PANEL */
+        /* NAV-PANEL (När du kör) */
         #nav-panel {
-            position: absolute; top: 65px; left: 10px; right: 10px; z-index: 2500;
-            background: var(--bg-glass); border: 1px solid var(--cyan);
-            border-radius: 10px; padding: 15px; display: none; backdrop-filter: blur(10px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            position: absolute; top: 10px; left: 10px; right: 10px; z-index: 4000;
+            background: var(--bg-glass); border: 2px solid var(--green);
+            border-radius: 15px; padding: 15px; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
-        #instruction-text { font-size: 1.1rem; font-weight: bold; color: #fff; display: block; margin-bottom: 5px; }
-        #turn-dist { font-size: 0.9rem; color: var(--yellow); font-family: monospace; }
 
         /* STOPP-LISTA */
         #stop-list-container {
-            position: absolute; bottom: 100px; left: 10px; width: 280px;
-            max-height: 45vh; display: flex; flex-direction: column; z-index: 2000;
-            background: var(--bg-glass); border: 1px solid var(--indigo);
-            border-radius: 15px; padding: 12px; backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
+            position: absolute; bottom: 20px; left: 10px; width: 300px;
+            z-index: 3000; background: var(--bg-glass); border: 1px solid var(--indigo);
+            border-radius: 15px; padding: 12px; display: none; flex-direction: column;
+            transition: transform 0.3s ease;
         }
-        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        #stop-list { overflow-y: auto; flex-grow: 1; margin-bottom: 10px; }
+
+        .list-content { max-height: 40vh; overflow-y: auto; margin: 10px 0; }
         
         .stop-item {
-            display: flex; align-items: center; background: rgba(255,255,255,0.08);
-            margin-bottom: 6px; padding: 8px; border-radius: 8px; font-size: 0.85rem;
+            display: flex; align-items: center; background: rgba(255,255,255,0.1);
+            margin-bottom: 8px; padding: 10px; border-radius: 10px; gap: 8px;
         }
-        .stop-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        
+        .stop-name { flex-grow: 1; font-size: 0.9rem; font-weight: bold; }
+
         /* KNAPPAR */
-        .btn-group { display: flex; gap: 8px; }
-        .nav-btn-main { flex: 2; background: var(--green); color: #000; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 0.75rem; }
-        .clear-btn-small { flex: 1; background: var(--red); color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 0.75rem; }
-        .stop-btn { background: none; border: none; color: white; cursor: pointer; padding: 0 5px; font-size: 1.1rem; opacity: 0.7; }
-        .stop-btn:hover { opacity: 1; }
-        
-        /* DÖLJ-KNAPP */
-        #hide-btn { background: var(--indigo); color: white; border: none; border-radius: 5px; padding: 2px 8px; cursor: pointer; font-size: 0.8rem; }
+        .btn { border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-edit { background: var(--indigo); padding: 5px 8px; }
+        .btn-del { background: var(--red); padding: 5px 8px; }
+        .btn-start { background: var(--green); color: black; width: 100%; margin-top: 10px; height: 45px; font-size: 1rem; }
+        .btn-hide { background: #333; font-size: 0.7rem; padding: 4px 8px; }
 
-        .map-tools { position: absolute; bottom: 25px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
-        .tool-btn { width: 55px; height: 55px; background: var(--bg-glass); border: 2px solid var(--indigo); border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.3rem; cursor: pointer; }
-        .voice-indicator { float: right; font-size: 1.5rem; cursor: pointer; padding: 5px; }
+        .map-tools { position: absolute; bottom: 30px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 15px; }
+        .tool-btn { width: 60px; height: 60px; background: var(--bg-glass); border: 2px solid var(--indigo); border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; }
 
-        /* När listan är gömd */
-        .minimized { height: 40px !important; overflow: hidden !important; width: 120px !important; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-    <div id="search-container">
-        <input type="text" id="search-input" placeholder="Håll inne på kartan för att lägga till..." autocomplete="off">
-    </div>
-
     <div id="nav-panel">
-        <div class="voice-indicator" onclick="repeatInstruction()">🔊</div>
-        <div id="instruction-box">
-            <span id="instruction-text">Väntar på rutt...</span>
-            <span id="turn-dist">---</span>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div id="instruction-box">
+                <div id="instruction-text" style="font-size: 1.2rem; font-weight: bold;">Beräknar...</div>
+                <div id="turn-dist" style="color: var(--yellow); font-family: monospace; font-size: 1.1rem; margin-top: 5px;">---</div>
+            </div>
+            <button onclick="repeatInstruction()" style="background: none; border: none; font-size: 2rem; cursor: pointer;">🔊</button>
         </div>
-        <div style="margin-top:15px;">
-            <button onclick="stopNavigation()" style="background:var(--red); border:none; color:white; padding:12px; border-radius:8px; font-size:0.8rem; font-weight:bold; width:100%;">AVBRYT NAVIGERING</button>
-        </div>
+        <button onclick="stopNavigation()" style="background: var(--red); color: white; border: none; width: 100%; padding: 10px; border-radius: 8px; margin-top: 15px; font-weight: bold;">AVBRYT</button>
     </div>
 
     <div id="stop-list-container">
-        <div class="list-header">
-            <span style="font-size:0.7rem; color:var(--cyan); font-weight:bold; letter-spacing:1px;">RUTT</span>
-            <button id="hide-btn" onclick="toggleList()">DÖLJ ^</button>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: var(--cyan); font-weight: bold; font-size: 0.8rem;">DIN RUTT</span>
+            <button class="btn btn-hide" id="toggle-list-btn" onclick="toggleListView()">DÖLJ ^</button>
         </div>
-        <div id="stop-list"></div>
-        <div class="btn-group">
-            <button class="nav-btn-main" onclick="startNavigation()">STARTA</button>
-            <button class="clear-btn-small" onclick="clearAll()">TÖM</button>
+        
+        <div id="list-wrapper">
+            <div class="list-content" id="stop-list"></div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-start" onclick="startNavigation()">STARTA RUTT</button>
+                <button class="btn" style="background: var(--red); margin-top:10px;" onclick="clearAll()">TÖM</button>
+            </div>
         </div>
     </div>
 
@@ -110,9 +92,9 @@
     </div>
 
     <script>
-        let followUser = true, userMarker = null, userCoords = null;
-        let stops = [], isMapMoving = false, pressTimer;
-        let isNavigating = false, routeSteps = [], currentStepIndex = 0, lastSpokenDistance = Infinity;
+        let userCoords = null, userMarker = null, followUser = true;
+        let stops = [], isNavigating = false, routeSteps = [], currentStepIndex = 0;
+        let lastSpokenDist = Infinity;
 
         const map = new maplibregl.Map({
             container: 'map',
@@ -121,41 +103,23 @@
                 sources: { 's-tiles': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], tileSize: 256 } },
                 layers: [{ id: 's-layer', type: 'raster', source: 's-tiles' }]
             },
-            center: [15.0, 62.0], zoom: 4
+            center: [15, 62], zoom: 5
         });
 
         // --- RÖST ---
         function speak(text) {
             if (!window.speechSynthesis) return;
             window.speechSynthesis.cancel();
-            const msg = new SpeechSynthesisUtterance(text);
-            msg.lang = 'sv-SE';
-            window.speechSynthesis.speak(msg);
+            const m = new SpeechSynthesisUtterance(text);
+            m.lang = 'sv-SE';
+            window.speechSynthesis.speak(m);
         }
 
         function repeatInstruction() {
-            if (routeSteps[currentStepIndex]) speak(routeSteps[currentStepIndex].maneuver.instruction);
+            if(routeSteps[currentStepIndex]) speak(routeSteps[currentStepIndex].maneuver.instruction);
         }
 
-        // --- UI LOGIK ---
-        function toggleList() {
-            const el = document.getElementById('stop-list-container');
-            const btn = document.getElementById('hide-btn');
-            el.classList.toggle('minimized');
-            btn.innerText = el.classList.contains('minimized') ? "VISA v" : "DÖLJ ^";
-        }
-
-        function renameStop(id) {
-            const stop = stops.find(s => s.id === id);
-            const newName = prompt("Nytt namn på stopp:", stop.name);
-            if (newName) { stop.name = newName; updateUI(); }
-        }
-
-        function removeStop(id) {
-            const idx = stops.findIndex(s => s.id === id);
-            if (idx > -1) { stops[idx].marker.remove(); stops.splice(idx, 1); updateUI(); }
-        }
-
+        // --- STOPP HANTERING ---
         function updateUI() {
             const list = document.getElementById('stop-list');
             const container = document.getElementById('stop-list-container');
@@ -164,50 +128,69 @@
             if (stops.length > 0 && !isNavigating) {
                 container.style.display = 'flex';
                 stops.forEach((s, i) => {
-                    const item = document.createElement('div');
-                    item.className = 'stop-item';
-                    item.innerHTML = `
+                    const div = document.createElement('div');
+                    div.className = 'stop-item';
+                    div.innerHTML = `
                         <span class="stop-name">${i+1}. ${s.name}</span>
-                        <button class="stop-btn" onclick="renameStop(${s.id})">✏️</button>
-                        <button class="stop-btn" onclick="removeStop(${s.id})">🗑️</button>
+                        <button class="btn btn-edit" onclick="renameStop(${s.id})">✏️</button>
+                        <button class="btn btn-del" onclick="removeStop(${s.id})">🗑️</button>
                     `;
-                    list.appendChild(item);
+                    list.appendChild(div);
                 });
-            } else if (stops.length === 0) {
+            } else if (!isNavigating) {
                 container.style.display = 'none';
             }
         }
 
-        // --- KARTA & PINNAR ---
-        function placePin(lngLat) {
-            if (isNavigating) return;
-            const marker = new maplibregl.Marker({ color: "#ff5555" }).setLngLat(lngLat).addTo(map);
-            stops.push({ id: Date.now(), marker, lngLat, name: `Stopp ${stops.length + 1}` });
+        function toggleListView() {
+            const wrapper = document.getElementById('list-wrapper');
+            const btn = document.getElementById('toggle-list-btn');
+            wrapper.classList.toggle('hidden');
+            btn.innerText = wrapper.classList.contains('hidden') ? "VISA v" : "DÖLJ ^";
+        }
+
+        function renameStop(id) {
+            const s = stops.find(x => x.id === id);
+            const n = prompt("Nytt namn:", s.name);
+            if(n) { s.name = n; updateUI(); }
+        }
+
+        function removeStop(id) {
+            const i = stops.findIndex(x => x.id === id);
+            if(i > -1) { stops[i].marker.remove(); stops.splice(i, 1); updateUI(); }
+        }
+
+        // --- KARTA ---
+        let pressTimer;
+        map.on('mousedown', e => pressTimer = setTimeout(() => addStop(e.lngLat), 600));
+        map.on('mouseup', () => clearTimeout(pressTimer));
+        map.on('touchstart', e => pressTimer = setTimeout(() => addStop(e.lngLat), 600));
+        map.on('touchend', () => clearTimeout(pressTimer));
+
+        function addStop(lngLat) {
+            if(isNavigating) return;
+            const marker = new maplibregl.Marker({color: "#ff5555"}).setLngLat(lngLat).addTo(map);
+            stops.push({ id: Date.now(), marker, lngLat, name: `Stopp ${stops.length+1}` });
             updateUI();
         }
 
-        map.on('mousedown', (e) => pressTimer = setTimeout(() => placePin(e.lngLat), 800));
-        map.on('mouseup', () => clearTimeout(pressTimer));
-        map.on('touchstart', (e) => pressTimer = setTimeout(() => placePin(e.lngLat), 800));
-        map.on('touchend', () => clearTimeout(pressTimer));
-
         // --- NAVIGATION ---
         async function startNavigation() {
-            if (!userCoords) return alert("Väntar på GPS... Se till att platstjänster är på.");
-            if (stops.length === 0) return alert("Markera ett stopp på kartan först!");
+            if (!userCoords) return alert("GPS ej redo. Vänta på lila pil!");
+            if (stops.length === 0) return alert("Lägg till stopp först!");
 
-            const coords = [userCoords, ...stops.map(s => [s.lngLat.lng, s.lngLat.lat])].map(c => c.join(',')).join(';');
-            const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true&language=sv`;
+            const pts = [userCoords, ...stops.map(s => [s.lngLat.lng, s.lngLat.lat])].map(c => c.join(',')).join(';');
+            const url = `https://router.project-osrm.org/route/v1/driving/${pts}?overview=full&geometries=geojson&steps=true&language=sv`;
 
             try {
                 const res = await fetch(url);
                 const data = await res.json();
-                if (data.code !== 'Ok') throw new Error();
+                if (data.code !== 'Ok') throw "Route error";
 
                 routeSteps = [];
-                data.routes[0].legs.forEach(leg => routeSteps = routeSteps.concat(leg.steps));
+                data.routes[0].legs.forEach(l => routeSteps = routeSteps.concat(l.steps));
                 currentStepIndex = 0;
-                lastSpokenDistance = Infinity;
+                lastSpokenDist = Infinity;
                 isNavigating = true;
 
                 document.getElementById('stop-list-container').style.display = 'none';
@@ -215,46 +198,36 @@
 
                 if (map.getSource('route')) map.removeSource('route');
                 map.addSource('route', { type: 'geojson', data: data.routes[0].geometry });
-                map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#7582ff', 'line-width': 6 } });
+                map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#50fa7b', 'line-width': 7 } });
 
-                updateNavigation();
+                updateNavLoop();
             } catch (e) {
-                alert("Kunde inte skapa rutt. Kontrollera internetanslutningen.");
+                alert("Kunde inte hämta rutt. Kolla internet!");
             }
         }
 
-        function updateNavigation() {
+        function updateNavLoop() {
             if (!isNavigating || !routeSteps[currentStepIndex]) return;
 
             const step = routeSteps[currentStepIndex];
-            const dist = getDist(userCoords[1], userCoords[0], step.maneuver.location[1], step.maneuver.location[0]);
+            const d = calcDist(userCoords[1], userCoords[0], step.maneuver.location[1], step.maneuver.location[0]);
 
             document.getElementById('instruction-text').innerText = step.maneuver.instruction;
-            document.getElementById('turn-dist').innerText = dist > 1000 ? `Om ${(dist/1000).toFixed(1)} km` : `Om ${Math.round(dist)} m`;
+            document.getElementById('turn-dist').innerText = d > 1000 ? (d/1000).toFixed(1) + " km" : Math.round(d) + " m";
 
-            // Röstvarningar
-            if (dist <= 3000 && lastSpokenDistance > 3000) { speak("Om tre kilometer, " + step.maneuver.instruction); lastSpokenDistance = 3000; }
-            if (dist <= 300 && lastSpokenDistance > 300) { speak("Om trehundra meter, " + step.maneuver.instruction); lastSpokenDistance = 300; }
-            if (dist <= 30 && lastSpokenDistance > 30) { speak(step.maneuver.instruction); lastSpokenDistance = 30; }
+            // RÖSTLOGIK
+            if (d <= 3000 && lastSpokenDist > 3000) { speak("Om tre kilometer: " + step.maneuver.instruction); lastSpokenDist = 3000; }
+            if (d <= 300 && lastSpokenDist > 300) { speak("Om trehundra meter: " + step.maneuver.instruction); lastSpokenDist = 300; }
+            if (d <= 30 && lastSpokenDist > 30) { speak("Nu: " + step.maneuver.instruction); lastSpokenDist = 30; }
 
-            if (dist < 15) {
+            if (d < 15) {
                 currentStepIndex++;
-                lastSpokenDistance = Infinity;
+                lastSpokenDist = Infinity;
                 if (currentStepIndex >= routeSteps.length) {
                     speak("Du är framme!");
-                    setTimeout(stopNavigation, 5000);
-                } else {
-                    updateNavigation();
+                    stopNavigation();
                 }
             }
-        }
-
-        function getDist(lat1, lon1, lat2, lon2) {
-            const R = 6371e3;
-            const dLat = (lat2-lat1)*Math.PI/180;
-            const dLon = (lon2-lon1)*Math.PI/180;
-            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
         function stopNavigation() {
@@ -271,22 +244,34 @@
             stopNavigation();
         }
 
+        function calcDist(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const p1 = lat1 * Math.PI/180;
+            const p2 = lat2 * Math.PI/180;
+            const dp = (lat2-lat1) * Math.PI/180;
+            const dl = (lon2-lon1) * Math.PI/180;
+            const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
         // --- GPS ---
-        const myEl = document.createElement('div');
-        myEl.innerHTML = `<svg width="30" height="30" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="black" stroke-width="5"/></svg>`;
-        
-        navigator.geolocation.watchPosition(pos => {
-            userCoords = [pos.coords.longitude, pos.coords.latitude];
+        const arrow = document.createElement('div');
+        arrow.innerHTML = `<svg width="40" height="40" viewBox="0 0 100 100"><path d="M50 5 L90 95 L50 75 L10 95 Z" fill="#bd93f9" stroke="white" stroke-width="4"/></svg>`;
+
+        navigator.geolocation.watchPosition(p => {
+            userCoords = [p.coords.longitude, p.coords.latitude];
             if (!userMarker) {
-                userMarker = new maplibregl.Marker({ element: myEl }).setLngLat(userCoords).addTo(map);
+                userMarker = new maplibregl.Marker({element: arrow}).setLngLat(userCoords).addTo(map);
                 map.setCenter(userCoords); map.setZoom(16);
             } else userMarker.setLngLat(userCoords);
+            
+            arrow.style.transform = `rotate(${p.coords.heading || 0}deg)`;
             if (followUser) map.easeTo({ center: userCoords });
-            if (isNavigating) updateNavigation();
-        }, null, { enableHighAccuracy: true });
+            if (isNavigating) updateNavLoop();
+        }, e => console.log(e), { enableHighAccuracy: true });
 
         function toggleLock() { followUser = !followUser; document.getElementById('lockBtn').innerText = followUser ? "🔒" : "🔓"; }
-        map.on('dragstart', () => { if (followUser) toggleLock(); });
+        map.on('dragstart', () => { followUser = false; document.getElementById('lockBtn').innerText = "🔓"; });
     </script>
 </body>
 </html>
